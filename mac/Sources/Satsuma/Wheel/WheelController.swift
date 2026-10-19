@@ -46,6 +46,8 @@ final class WheelController {
         let origin = CGPoint(x: (cx - L.cx).rounded(), y: (cy - (L.height - L.cy)).rounded())
 
         if panel == nil || layers?.px != px {
+            ticker?.stop()
+            panel?.orderOut(nil)
             let p = OverlayPanel(size: CGSize(width: L.width, height: L.height))
             let v = WheelView(frame: NSRect(x: 0, y: 0, width: L.width, height: L.height))
             v.controller = self

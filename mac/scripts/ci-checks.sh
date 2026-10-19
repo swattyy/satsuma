@@ -50,6 +50,7 @@ if [ -z "$(command -v ffmpeg)" ]; then
     expect loudness "Loudness needs FFmpeg" --tool normalize "$S/tone.wav"
 fi
 for t in jpg pdf; do run "logo-$t" --convert "$t" "$S/logo.png"; done
+for t in png jpg; do run "svg-$t" --convert "$t" "$S/badge.svg"; done
 for t in mp4 png pdf; do run "gif-$t" --convert "$t" "$S/anim.gif"; done
 for t in rotate metadata ocr compress resize background; do run "tool-$t" --tool "$t" "$S/photo.jpg"; done
 expect tool-redact "No faces found" --tool redact "$S/photo.jpg"

@@ -6,24 +6,24 @@ import SatsumaCore
 /// Each dialog calls `finish(value)` to run the tool, or `finish(nil)` (or closes the window) to cancel.
 @MainActor
 enum ToolDialog {
-    @MainActor final class Session: NSObject, NSWindowDelegate {
+    /// Keeps the window and its delegate alive while the dialog is up. Only used on the main thread.
+    final class Session: NSObject, NSWindowDelegate {
+        static var live: [Session] = []
         var window: NSWindow?
         var onClose: (() -> Void)?
         func close() {
             window?.delegate = nil
             window?.close()
             window = nil
-            ToolDialog.sessions.removeAll { $0 === self }
+            Session.live.removeAll { $0 === self }
         }
         func windowWillClose(_ notification: Notification) {
             let c = onClose
             onClose = nil
-            ToolDialog.sessions.removeAll { $0 === self }
+            Session.live.removeAll { $0 === self }
             c?()
         }
     }
-
-    fileprivate static var sessions: [Session] = []
 
     static func present<T, V: View>(_ title: String, width: CGFloat = 460, _ content: (@escaping (T?) -> Void) -> V) async -> T? {
         await withCheckedContinuation { (c: CheckedContinuation<T?, Never>) in
@@ -47,7 +47,7 @@ enum ToolDialog {
             w.center()
             session.window = w
             w.delegate = session
-            sessions.append(session)
+            Session.live.append(session)
             NSApp.activate(ignoringOtherApps: true)
             w.makeKeyAndOrderFront(nil)
         }

@@ -46,6 +46,13 @@ enum Samples {
         > A quote to finish.
         """)
         try P.writeText(add("notes.txt"), "Plain text notes.\n\nSecond paragraph with more words in it.\n")
+        try P.writeText(add("badge.svg"), """
+        <svg xmlns="http://www.w3.org/2000/svg" width="240" height="160" viewBox="0 0 240 160">
+          <rect width="240" height="160" rx="24" fill="#ff7a1a"/>
+          <circle cx="80" cy="80" r="44" fill="#ffffff" fill-opacity="0.85"/>
+          <text x="140" y="92" font-family="Helvetica" font-size="36" fill="#ffffff">SVG</text>
+        </svg>
+        """)
         try P.writeText(add("page.html"), "<!doctype html><html><head><title>Sample page</title></head><body><h1>Sample page</h1><p>Some <b>bold</b> text and a <a href=\"https://example.com\">link</a>.</p><ul><li>one</li><li>two</li></ul><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table></body></html>")
 
         let doc = DocReaders.markdown(try P.readText(P.join(dir, "notes.md")))

@@ -90,8 +90,12 @@ final class DragMonitor {
         else if key == s.toolsKey { kind = .tools }
         else if key == s.actionsKey { kind = .actions }
         else { return }
-        // The button state from the events can lag; ask the system too.
+        // The button state from the events can lag (and drag sessions may not pass every drag event on); ask the system too.
         let leftDown = buttonDown || (NSEvent.pressedMouseButtons & 1) != 0
+        if !moved {
+            let p = NSEvent.mouseLocation
+            moved = abs(p.x - downPoint.x) > threshold || abs(p.y - downPoint.y) > threshold
+        }
         guard leftDown, moved || WheelController.shared.isOpen else { return }
         if WheelController.shared.isOpen {
             WheelController.shared.open(kind, at: NSEvent.mouseLocation, files: DragFiles.Snapshot())
