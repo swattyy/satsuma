@@ -1,0 +1,28 @@
+﻿<Application x:Class="Satsuma.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown"
+             ThemeMode="System">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="UI/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Tangerine instead of the system accent for Fluent sliders, radio buttons and selections. -->
+            <Color x:Key="SystemAccentColor">#FF7A1A</Color>
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FF7A1A" />
+            <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#E6FF7A1A" />
+            <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#CCFF7A1A" />
+            <SolidColorBrush x:Key="SliderThumbBackground" Color="#FF7A1A" />
+            <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#FF8F3D" />
+            <SolidColorBrush x:Key="RadioButtonOuterEllipseCheckedFill" Color="#FF7A1A" />
+            <SolidColorBrush x:Key="RadioButtonOuterEllipseCheckedStroke" Color="#FF7A1A" />
+            <SolidColorBrush x:Key="RadioButtonOuterEllipseCheckedStrokePointerOver" Color="#FF8F3D" />
+            <SolidColorBrush x:Key="RadioButtonCheckOuterEllipseCheckedFillPointerOver" Color="#FF8F3D" />
+            <SolidColorBrush x:Key="RadioButtonCheckOuterEllipseCheckedFillPressed" Color="#E8650F" />
+            <SolidColorBrush x:Key="RadioButtonCheckOuterEllipseCheckedStrokePressed" Color="#E8650F" />
+            <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="#FF7A1A" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

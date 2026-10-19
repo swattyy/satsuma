@@ -1,0 +1,24 @@
+Satsuma includes the following open-source components. Each is used under its own
+license; the full license texts are at the links below.
+
+.NET runtime and WPF (Microsoft)          MIT License
+  https://github.com/dotnet/runtime/blob/main/LICENSE.TXT
+  https://github.com/dotnet/runtime/blob/main/THIRD-PARTY-NOTICES.TXT
+  https://github.com/dotnet/wpf/blob/main/LICENSE.TXT
+
+C#/WinRT projections (Microsoft)           MIT License
+  https://github.com/microsoft/CsWinRT/blob/master/LICENSE
+
+SkiaSharp (Microsoft / Xamarin)            MIT License
+  https://github.com/mono/SkiaSharp/blob/main/LICENSE.md
+  Includes Skia (BSD-3-Clause) and its bundled libraries:
+  https://github.com/mono/SkiaSharp/blob/main/THIRD-PARTY-NOTICES.txt
+
+PdfPig (UglyToad)                          Apache License 2.0
+  https://github.com/UglyToad/PdfPig/blob/master/LICENSE
+
+Markdig (Alexandre Mutel)                  BSD 2-Clause License
+  https://github.com/xoofx/markdig/blob/master/license.txt
+
+FFmpeg is not included. When you install it from Settings, it is downloaded
+separately (Gyan.FFmpeg.Essentials via winget) and runs as its own program.

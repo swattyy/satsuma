@@ -1,0 +1,51 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Satsuma.ico</ApplicationIcon>
+    <RootNamespace>Satsuma</RootNamespace>
+    <AssemblyName>Satsuma</AssemblyName>
+    <Product>Satsuma</Product>
+    <Authors>swattyy</Authors>
+    <Copyright>Copyright (c) 2026 swattyy</Copyright>
+    <Description>Drag a file, tap Shift, drop. A zero-click offline file converter for Windows.</Description>
+    <Version>1.0.0</Version>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <TieredPGO>true</TieredPGO>
+    <!-- WPF0001: Fluent ThemeMode is marked experimental. CA1416: platform checks are covered by SupportedOSPlatformVersion. -->
+    <NoWarn>$(NoWarn);WPF0001;CA1416;CS8618;CS0618</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Markdig" Version="1.4.1" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="SkiaSharp" Version="4.153.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\Satsuma.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WPF projects leave System.IO out of the implicit usings (it clashes with Shapes.Path); we don't use Shapes. -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <!-- Debug symbols (SkiaSharp's native PDB alone is ~90 MB) don't belong in the published app. -->
+  <Target Name="DropPdbsFromPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <_SatsumaPdbs Include="$(PublishDir)*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(_SatsumaPdbs)" />
+  </Target>
+
+</Project>
