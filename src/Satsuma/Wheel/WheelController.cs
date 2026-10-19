@@ -27,6 +27,9 @@ public sealed class WheelController : IFrameClient
     POINT _lastPt;
     POINT _openPt;
     double _openedAt;
+    int _hit = -1;                 // segment under the pointer right now (drives drop effect and drop label)
+    int _clearToken, _dimToken;    // cancel stale delayed hover-clear / dim callbacks
+    bool _dragInside;
 
     public bool IsOpen => _visible && !_closing;
     public WheelKind Kind => _st.Kind;
@@ -76,6 +79,10 @@ public sealed class WheelController : IFrameClient
         _st.Segments.Clear();
         _st.Leaving.Clear();
         _st.Hover = -1;
+        _hit = -1;
+        _dragInside = false;
+        _clearToken++;
+        _dimToken++;
         _st.Loading = true;
         _st.Open.Configure(0.36f, 0.72f).Snap(0); _st.Open.To(1);
         _st.Fade.Configure(0.13f, 1f).Snap(0); _st.Fade.To(1);
@@ -230,6 +237,8 @@ public sealed class WheelController : IFrameClient
             _st.Segments.Clear();
             ApplyContent(initial: true);
         }
+        _dragInside = true;
+        _dimToken++;
         _st.Dim.To(0);
         StartAnimating();
         return OnDragOver(pt, allowed);
@@ -250,9 +259,17 @@ public sealed class WheelController : IFrameClient
     internal void OnDragLeave()
     {
         if (!IsOpen) return;
-        SetHoverIndex(-1);
-        _st.Dim.To(1);
-        StartAnimating();
+        _hit = -1;
+        _dragInside = false;
+        ClearHoverSoon();
+        // Only dim if the drag stays outside for a moment; a quick pass outside the ring shouldn't flash the wheel.
+        int token = ++_dimToken;
+        OverlayThread.Instance.After(0.25, () =>
+        {
+            if (token != _dimToken || _dragInside || !IsOpen) return;
+            _st.Dim.To(1);
+            StartAnimating();
+        });
     }
 
     internal int OnDrop(IComDataObject data, POINT pt, int allowed)
@@ -296,19 +313,32 @@ public sealed class WheelController : IFrameClient
     {
         var L = _st.Layout;
         int idx = L.HitTest(pt.X - _x, pt.Y - _y, _st.Segments.Count);
-        SetHoverIndex(idx >= 0 ? idx : -1);
+        _hit = idx >= 0 ? idx : -1;
+        if (_hit >= 0) SetHoverIndex(_hit);
+        else ClearHoverSoon();
         return idx;
+    }
+
+    /// <summary>
+    /// Leaving a segment for the hub or the outside clears the highlight after a short pause, so sweeping
+    /// across the center to another segment doesn't flash the wheel back to its idle look. Drops still use
+    /// the exact hit (<see cref="_hit"/>), so dropping in the hub always cancels.
+    /// </summary>
+    void ClearHoverSoon()
+    {
+        if (_st.Hover < 0) return;
+        int token = ++_clearToken;
+        OverlayThread.Instance.After(0.12, () => { if (token == _clearToken && _hit < 0) SetHoverIndex(-1); });
     }
 
     void SetHoverIndex(int idx)
     {
+        _clearToken++; // any real hover change cancels a pending clear
         if (idx == _st.Hover) return;
-        if (_st.Hover >= 0 && _st.Hover < _st.Segments.Count) _st.Segments[_st.Hover].Hover.To(0);
-        _st.Hover = idx;
+        ApplyHover(_st, _st.Hover, idx);
         if (idx >= 0 && idx < _st.Segments.Count)
         {
             var item = _st.Segments[idx].Item;
-            _st.Segments[idx].Hover.To(1);
             SetHub((item.Caption, item.Label, true));
             SoundFx.Play(SoundFx.Tick);
         }
@@ -316,12 +346,23 @@ public sealed class WheelController : IFrameClient
         StartAnimating();
     }
 
+    // The new segment lights up quickly and the old one fades out more slowly, both without bounce, so the
+    // highlight never dips (and the wheel never looks darker) while moving from one segment to the next.
+    public const float HoverInResponse = 0.1f, HoverOutResponse = 0.35f;
+
+    public static void ApplyHover(WheelState st, int from, int to)
+    {
+        if (from >= 0 && from < st.Segments.Count) st.Segments[from].Hover.Configure(HoverOutResponse, 1f).To(0);
+        if (to >= 0 && to < st.Segments.Count) st.Segments[to].Hover.Configure(HoverInResponse, 1f).To(1);
+        st.Hover = to;
+    }
+
     internal (int type, string message, string insert) CurrentDropDescription()
     {
         if (!IsOpen) return (OleData.DropImageInvalid, "", "");
-        if (_st.Hover >= 0 && _st.Hover < _st.Segments.Count)
+        if (_hit >= 0 && _hit < _st.Segments.Count)
         {
-            var item = _st.Segments[_st.Hover].Item;
+            var item = _st.Segments[_hit].Item;
             return (OleData.DropImageCopy, item.DropText, item.Label);
         }
         return (OleData.DropImageNone, _st.Segments.Count > 0 ? "Pick an option" : "Nothing to do here", "");
@@ -371,6 +412,71 @@ public sealed class WheelController : IFrameClient
     }
 
     // ------------------------------------------------------------------ testing hooks
+
+    /// <summary>
+    /// Test helper: simulates moving the pointer from segment <paramref name="from"/> to <paramref name="to"/> at 120 fps.
+    /// Returns, per frame, the strongest segment highlight and the ring's mean brightness, and writes a filmstrip.
+    /// <paramref name="legacy"/> uses the 1.0.1 timing (symmetric 0.2 s springs with a little bounce).
+    /// </summary>
+    public static (List<float> peak, List<float> brightness) SimulateHoverTransition(WheelKind kind, IReadOnlyList<string> files,
+        int from, int to, bool dark, bool legacy, float scale, Backdrop.Snapshot? backdrop, string stripPath)
+    {
+        var st = new WheelState { Layout = new WheelLayout(scale, false), Dark = dark, Kind = kind, Backdrop = backdrop };
+        var content = Catalog.Build(kind, files, false);
+        st.Content = content;
+        st.Loading = false;
+        foreach (var item in content.Items) st.Segments.Add(new SegmentState { Item = item });
+        st.Open.Snap(1); st.Fade.Snap(1); st.HubPop.Snap(1);
+        foreach (var s in st.Segments) s.Appear.Snap(1);
+        st.Segments[from].Hover.Snap(1);
+        st.Hover = from;
+        if (legacy)
+        {
+            st.Segments[from].Hover.Configure(0.2f, 0.8f).To(0);
+            st.Segments[to].Hover.Configure(0.2f, 0.8f).To(1);
+            st.Hover = to;
+        }
+        else ApplyHover(st, from, to);
+
+        var L = st.Layout;
+        var renderer = new WheelRenderer();
+        using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(L.Width, L.Height, SkiaSharp.SKColorType.Bgra8888, SkiaSharp.SKAlphaType.Premul));
+        var peak = new List<float>();
+        var brightness = new List<float>();
+        const int frames = 48, every = 6;
+        using var strip = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(L.Width / 2 * (frames / every + 1), L.Height / 2));
+        strip.Canvas.Clear(dark ? new SkiaSharp.SKColor(24, 22, 30) : new SkiaSharp.SKColor(240, 236, 232));
+        for (int f = 0; f <= frames; f++)
+        {
+            if (f > 0) foreach (var s in st.AllSprings()) s.Step(1f / 120f);
+            surface.Canvas.Clear(SkiaSharp.SKColors.Transparent);
+            renderer.Draw(surface.Canvas, st);
+            using var img = surface.Snapshot();
+            peak.Add(st.Segments.Max(s => Math.Clamp(s.Hover.Value, 0, 1)));
+            using (var pix = img.PeekPixels())
+            {
+                double sum = 0; int count = 0;
+                for (int y = 0; y < L.Height; y += 2)
+                    for (int x = 0; x < L.Width; x += 2)
+                    {
+                        float dx = x - L.Cx, dy = y - L.Cy, d = MathF.Sqrt(dx * dx + dy * dy);
+                        if (d < L.RIn || d > L.R) continue;
+                        var c = pix.GetPixelColor(x, y);
+                        sum += 0.2126 * c.Red + 0.7152 * c.Green + 0.0722 * c.Blue;
+                        count++;
+                    }
+                brightness.Add((float)(sum / Math.Max(1, count)));
+            }
+            if (f % every == 0)
+                strip.Canvas.DrawImage(img, new SkiaSharp.SKRect(0, 0, L.Width, L.Height),
+                    SkiaSharp.SKRect.Create(f / every * (L.Width / 2), 0, L.Width / 2, L.Height / 2),
+                    new SkiaSharp.SKSamplingOptions(SkiaSharp.SKFilterMode.Linear), null);
+        }
+        using (var stripImg = strip.Snapshot())
+        using (var png = stripImg.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100))
+            File.WriteAllBytes(stripPath, png.ToArray());
+        return (peak, brightness);
+    }
 
     /// <summary>Renders a wheel frame offscreen for visual tests.</summary>
     public static SkiaSharp.SKImage RenderPreview(WheelKind kind, IReadOnlyList<string> files, int hover, float t, bool dark, float scale = 2f, Backdrop.Snapshot? backdrop = null)

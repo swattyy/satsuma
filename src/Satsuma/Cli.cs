@@ -52,7 +52,7 @@ public static class Cli
                     result["ok"] = true;
                     break;
                 case "--render-test":
-                    RenderTest(rest[0]);
+                    result["transition"] = RenderTest(rest[0]);
                     result["ok"] = true;
                     break;
                 case "--list":
@@ -183,8 +183,8 @@ public static class Cli
         return code;
     }
 
-    /// <summary>Renders the wheel over a synthetic wallpaper at several animation states.</summary>
-    static void RenderTest(string dir)
+    /// <summary>Renders the wheel over a synthetic wallpaper at several animation states, and measures hover transitions.</summary>
+    static Dictionary<string, object> RenderTest(string dir)
     {
         Directory.CreateDirectory(dir);
         var samples = Path.Combine(dir, "samples");
@@ -269,6 +269,30 @@ public static class Cli
             using var png = img.Encode(SKEncodedImageFormat.Png, 100);
             File.WriteAllBytes(Path.Combine(dir, $"icon-{size}{(tray ? "-tray" : "")}.png"), png.ToArray());
         }
+
+        // Hover transition PDF -> TIFF on a JPG's convert wheel, old timing vs new, in dark mode where a dip shows most.
+        var metrics = new Dictionary<string, object>();
+        using (var wallpaper = Wallpaper(layout.Width, layout.Height, true))
+        using (var snap = Backdrop.FromImage(wallpaper, new Native.Win32.RECT(0, 0, layout.Width, layout.Height)))
+        {
+            foreach (var legacy in new[] { true, false })
+            {
+                string name = legacy ? "old" : "new";
+                var (peak, bright) = WheelController.SimulateHoverTransition(WheelKind.Convert, new[] { jpg }, 4, 5, true, legacy, scale, snap,
+                    Path.Combine(dir, $"transition-{name}.png"));
+                metrics[name] = new Dictionary<string, object>
+                {
+                    ["weakestHighlight"] = Math.Round(peak.Min(), 3),
+                    ["brightnessMin"] = Math.Round(bright.Min(), 1),
+                    ["brightnessMax"] = Math.Round(bright.Max(), 1),
+                    ["brightnessStart"] = Math.Round(bright[0], 1),
+                    ["brightnessEnd"] = Math.Round(bright[^1], 1),
+                    ["brightnessCurve"] = string.Join(" ", bright.Where((_, i) => i % 3 == 0).Select(b => b.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture))),
+                    ["highlightCurve"] = string.Join(" ", peak.Where((_, i) => i % 3 == 0).Select(b => b.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))),
+                };
+            }
+        }
+        return metrics;
     }
 
     /// <summary>Wizard images for the Inno Setup installer (BMP, several DPI sizes).</summary>

@@ -4,7 +4,7 @@
 ; then compile this file with ISCC (Inno Setup 6). The installer lands in dist/release.
 
 #define AppName "Satsuma"
-#define AppVersion "1.0.1"
+#define AppVersion "1.0.2"
 #define AppPublisher "swattyy"
 #define AppURL "https://github.com/swattyy/satsuma"
 #define AppExe "Satsuma.exe"

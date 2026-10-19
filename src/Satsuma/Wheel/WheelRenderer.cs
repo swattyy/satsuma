@@ -8,7 +8,7 @@ public sealed class SegmentState
 {
     public required WheelItem Item;
     public readonly Spring Appear = new(0, 0.44f, 0.76f);
-    public readonly Spring Hover = new(0, 0.2f, 0.8f);
+    public readonly Spring Hover = new(0, WheelController.HoverInResponse, 1f);
     public readonly Spring Press = new(0, 0.16f, 0.55f);
     public SKPath? Path;
     public float LabelSize;
@@ -115,13 +115,15 @@ public sealed class WheelRenderer
     {
         float r = L.RPlate * scale;
         float outer = r + 34 * L.S;
-        float k = dark ? 1.7f : 1f;
+        float k = dark ? 0.85f : 0.5f;
         var colors = new[]
         {
             new SKColor(0, 0, 0, (byte)(58 * k)), new SKColor(0, 0, 0, (byte)(44 * k)), new SKColor(0, 0, 0, (byte)(20 * k)),
             new SKColor(0, 0, 0, (byte)(6 * k)), SKColors.Transparent,
         };
         float[] pos = { (r - 24 * L.S) / outer, (r - 4 * L.S) / outer, (r + 8 * L.S) / outer, (r + 20 * L.S) / outer, 1f };
+        // A paint's own alpha multiplies its shader, so every gradient draw starts from opaque white.
+        _fill.Color = SKColors.White;
         _fill.Shader = SKShader.CreateRadialGradient(new SKPoint(L.Cx, L.Cy + 10 * L.S), outer, colors, pos, SKShaderTileMode.Clamp);
         c.DrawCircle(L.Cx, L.Cy + 10 * L.S, outer, _fill);
         _fill.Shader = null;
@@ -141,8 +143,9 @@ public sealed class WheelRenderer
         _fill.Color = dark ? new SKColor(26, 25, 30, a) : new SKColor(251, 249, 246, a);
         c.DrawPaint(_fill);
         var b = clip.Bounds;
+        _fill.Color = SKColors.White;
         _fill.Shader = SKShader.CreateLinearGradient(new SKPoint(0, b.Top), new SKPoint(0, b.Bottom),
-            new[] { SKColors.White.WithAlpha((byte)(dark ? 18 : 70)), SKColors.White.WithAlpha(0) }, SKShaderTileMode.Clamp);
+            new[] { SKColors.White.WithAlpha((byte)((dark ? 18 : 70) * a / 255)), SKColors.White.WithAlpha(0) }, SKShaderTileMode.Clamp);
         c.DrawPaint(_fill);
         _fill.Shader = null;
         c.Restore();
@@ -157,9 +160,10 @@ public sealed class WheelRenderer
 
         // Hairlines: a bright inner rim and a faint outer edge for definition on any wallpaper.
         _stroke.StrokeWidth = 1.2f * L.S;
+        _stroke.Color = SKColors.White;
         _stroke.Shader = SKShader.CreateLinearGradient(new SKPoint(0, L.Cy - r), new SKPoint(0, L.Cy + r),
-            dark ? new[] { SKColors.White.WithAlpha(46), SKColors.White.WithAlpha(12) }
-                 : new[] { SKColors.White.WithAlpha(235), SKColors.White.WithAlpha(110) }, SKShaderTileMode.Clamp);
+            dark ? new[] { SKColors.White.WithAlpha(14), SKColors.White.WithAlpha(4) }
+                 : new[] { SKColors.White.WithAlpha(45), SKColors.White.WithAlpha(18) }, SKShaderTileMode.Clamp);
         c.DrawCircle(L.Cx, L.Cy, r - 0.6f * L.S, _stroke);
         _stroke.Shader = null;
         _stroke.StrokeWidth = 1f * L.S;
@@ -201,17 +205,19 @@ public sealed class WheelRenderer
             _fill.MaskFilter = null;
         }
 
-        // Idle frosted fill (gradient runs along the radius, lighter towards the rim).
+        // Idle frosted fill (gradient runs along the radius, lighter towards the rim). The paint is opaque white
+        // so the gradient alone sets the opacity; earlier draws (like the glow above) must not leak into it.
+        _fill.Color = SKColors.White;
         _fill.Shader = SKShader.CreateLinearGradient(new SKPoint(L.R, 0), new SKPoint(L.RIn, 0),
-            dark ? new[] { SKColors.White.WithAlpha((byte)(34 * alpha)), SKColors.White.WithAlpha((byte)(16 * alpha)) }
-                 : new[] { SKColors.White.WithAlpha((byte)(170 * alpha)), SKColors.White.WithAlpha((byte)(105 * alpha)) },
+            dark ? new[] { SKColors.White.WithAlpha((byte)(22 * alpha)), SKColors.White.WithAlpha((byte)(11 * alpha)) }
+                 : new[] { SKColors.White.WithAlpha((byte)(100 * alpha)), SKColors.White.WithAlpha((byte)(62 * alpha)) },
             SKShaderTileMode.Clamp);
         c.DrawPath(seg.Path, _fill);
 
         if (hover > 0.003f)
         {
             _fill.Shader = SKShader.CreateLinearGradient(new SKPoint(L.R, -L.R * 0.3f), new SKPoint(L.RIn, L.R * 0.3f),
-                new[] { AccentLight.WithAlpha((byte)(255 * hover * alpha)), AccentDeep.WithAlpha((byte)(255 * hover * alpha)) },
+                new[] { AccentLight.WithAlpha((byte)(130 * hover * alpha)), AccentDeep.WithAlpha((byte)(130 * hover * alpha)) },
                 SKShaderTileMode.Clamp);
             c.DrawPath(seg.Path, _fill);
         }
@@ -219,11 +225,12 @@ public sealed class WheelRenderer
 
         // Bevel highlight.
         _stroke.StrokeWidth = 1f * L.S;
+        _stroke.Color = SKColors.White;
         _stroke.Shader = SKShader.CreateLinearGradient(new SKPoint(L.R, 0), new SKPoint(L.RIn, 0),
             new[]
             {
-                SKColors.White.WithAlpha((byte)((dark ? 50 : 240) * alpha * (1 - hover) + 150 * hover * alpha)),
-                SKColors.White.WithAlpha((byte)((dark ? 10 : 90) * alpha)),
+                SKColors.White.WithAlpha((byte)((dark ? 18 : 40) * alpha * (1 - hover) + 60 * hover * alpha)),
+                SKColors.White.WithAlpha((byte)((dark ? 4 : 14) * alpha)),
             }, SKShaderTileMode.Clamp);
         c.DrawPath(seg.Path, _stroke);
         _stroke.Shader = null;
@@ -324,9 +331,10 @@ public sealed class WheelRenderer
         using var hub = new SKPath();
         hub.AddCircle(L.Cx, L.Cy, r);
         DrawGlass(c, st, hub, dark, dark ? 40 : 75);
+        _fill.Color = SKColors.White;
         _fill.Shader = SKShader.CreateLinearGradient(new SKPoint(0, L.Cy - r), new SKPoint(0, L.Cy + r),
-            dark ? new[] { new SKColor(255, 255, 255, 20), new SKColor(255, 255, 255, 6) }
-                 : new[] { new SKColor(255, 255, 255, 150), new SKColor(255, 255, 255, 90) }, SKShaderTileMode.Clamp);
+            dark ? new[] { new SKColor(255, 255, 255, 16), new SKColor(255, 255, 255, 5) }
+                 : new[] { new SKColor(255, 255, 255, 132), new SKColor(255, 255, 255, 79) }, SKShaderTileMode.Clamp);
         c.DrawCircle(L.Cx, L.Cy, r, _fill);
         _fill.Shader = null;
         _stroke.StrokeWidth = 1f * L.S;
@@ -442,6 +450,7 @@ public sealed class WheelRenderer
             var cap = new SKRect(cx0, midY - 8.5f * L.S, cx0 + keyW, midY + 8.5f * L.S);
             if (isActive)
             {
+                _fill.Color = SKColors.White;
                 _fill.Shader = SKShader.CreateLinearGradient(new SKPoint(cap.Left, cap.Top), new SKPoint(cap.Right, cap.Bottom),
                     new[] { AccentLight, AccentDeep }, SKShaderTileMode.Clamp);
                 c.DrawRoundRect(cap, 4.5f * L.S, 4.5f * L.S, _fill);
