@@ -32,14 +32,14 @@ public static partial class Catalog
         {
             case Group.Image:
             case Group.Gif:
-                list.Add(Tool("compress", "Compress", Glyphs.Compress, "Reduce file size", async ctx =>
+                list.Add(Tool("compress", "Compress", Glyphs.Compress, "Smaller file", async ctx =>
                 {
                     var o = await ToolDialogs.ImageCompressAsync(ctx.Files);
                     if (o == null) return OpResult.Cancel();
                     ctx.BeginWork("Compressing…");
                     return await ForEach(ctx, (f, i) => ImageTools.CompressAsync(f, o));
                 }, interactive: true));
-                list.Add(Tool("resize", "Resize", Glyphs.Resize, "Change dimensions", async ctx =>
+                list.Add(Tool("resize", "Resize", Glyphs.Resize, "Change size", async ctx =>
                 {
                     var o = await ToolDialogs.ImageResizeAsync(ctx.Files);
                     if (o == null) return OpResult.Cancel();
@@ -54,9 +54,9 @@ public static partial class Catalog
                         ctx.BeginWork("Cropping…");
                         return OpResult.Files(new[] { await ImageTools.CropAsync(ctx.File, rect.Value) });
                     }, interactive: true));
-                list.Add(Tool("rotate", "Rotate", Glyphs.Rotate, "Turn 90° clockwise", ctx => ForEach(ctx, (f, i) => ImageTools.RotateAsync(f, 90)), working: "Rotating…"));
-                list.Add(Tool("metadata", "Metadata", Glyphs.Tag, "Remove location & camera info", ctx => ForEach(ctx, (f, i) => ImageTools.StripMetadataAsync(f)), working: "Removing metadata…"));
-                list.Add(Tool("ocr", "Text", Glyphs.Text, "Copy the text in the image", async ctx =>
+                list.Add(Tool("rotate", "Rotate", Glyphs.Rotate, "90° clockwise", ctx => ForEach(ctx, (f, i) => ImageTools.RotateAsync(f, 90)), working: "Rotating…"));
+                list.Add(Tool("metadata", "Metadata", Glyphs.Tag, "Strip photo info", ctx => ForEach(ctx, (f, i) => ImageTools.StripMetadataAsync(f)), working: "Removing metadata…"));
+                list.Add(Tool("ocr", "Text", Glyphs.Text, "Copy its text", async ctx =>
                 {
                     var texts = new List<string>();
                     for (int i = 0; i < ctx.Files.Count; i++) { texts.Add(await ImageTools.RecognizeTextAsync(ctx.Files[i])); ctx.ReportItem(i, 1); }
@@ -66,14 +66,14 @@ public static partial class Catalog
                     var words = DocTools.Count(all).words;
                     return OpResult.Done("Text copied", $"{words} words on the clipboard");
                 }, working: "Reading text…"));
-                list.Add(Tool("redact", "Redact", Glyphs.Redact, "Blur faces or text", async ctx =>
+                list.Add(Tool("redact", "Redact", Glyphs.Redact, "Hide faces, text", async ctx =>
                 {
                     var o = await ToolDialogs.RedactAsync(ctx.Files);
                     if (o == null) return OpResult.Cancel();
                     ctx.BeginWork("Redacting…");
                     return await ForEach(ctx, async (f, i) => (await ImageTools.RedactAsync(f, o.Faces, o.Text, o.Style)).output);
                 }, interactive: true));
-                list.Add(Tool("background", "Backdrop", Glyphs.Background, "Place on a background", async ctx =>
+                list.Add(Tool("background", "Backdrop", Glyphs.Background, "Add background", async ctx =>
                 {
                     var o = await ToolDialogs.BackgroundAsync(ctx.Files);
                     if (o == null) return OpResult.Cancel();
@@ -82,9 +82,9 @@ public static partial class Catalog
                 }, interactive: true));
                 if (many)
                 {
-                    list.Add(Tool("makepdf", "Make PDF", Glyphs.Document, "One page per image", async ctx =>
+                    list.Add(Tool("makepdf", "Make PDF", Glyphs.Document, "Page per image", async ctx =>
                         OpResult.Files(new[] { await ImageTools.MakePdfAsync(ctx.Files, p => ctx.Report(p)) }), working: "Making PDF…"));
-                    list.Add(Tool("collage", "Collage", Glyphs.Grid, "Combine into one image", async ctx =>
+                    list.Add(Tool("collage", "Collage", Glyphs.Grid, "Combine images", async ctx =>
                     {
                         var o = await ToolDialogs.CollageAsync(ctx.Files);
                         if (o == null) return OpResult.Cancel();
@@ -95,7 +95,7 @@ public static partial class Catalog
                 break;
 
             case Group.Video:
-                list.Add(Tool("compress", "Compress", Glyphs.Compress, "Reduce file size", async ctx =>
+                list.Add(Tool("compress", "Compress", Glyphs.Compress, "Smaller file", async ctx =>
                 {
                     var o = await ToolDialogs.VideoCompressAsync(ctx.Files);
                     if (o == null) return OpResult.Cancel();
@@ -103,24 +103,24 @@ public static partial class Catalog
                     return await ForEach(ctx, (f, i) => MediaTools.CompressVideoAsync(f, o, p => ctx.ReportItem(i, p), ctx.Cancel));
                 }, interactive: true));
                 if (!many)
-                    list.Add(Tool("trim", "Trim", Glyphs.Cut, "Cut the start or end", async ctx =>
+                    list.Add(Tool("trim", "Trim", Glyphs.Cut, "Cut start or end", async ctx =>
                     {
                         var r = await ToolDialogs.TrimAsync(ctx.File);
                         if (r == null) return OpResult.Cancel();
                         ctx.BeginWork("Trimming…");
                         return OpResult.Files(new[] { await MediaTools.TrimAsync(ctx.File, r.Value.start, r.Value.end, p => ctx.Report(p), ctx.Cancel) });
                     }, interactive: true));
-                list.Add(Tool("mute", "Mute", Glyphs.Mute, "Remove the audio", ctx => ForEach(ctx, (f, i) => MediaTools.MuteAsync(f, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Removing audio…"));
-                list.Add(Tool("720p", "720p", Glyphs.Resize, "Scale down to 720p", ctx => ForEach(ctx, (f, i) => MediaTools.ResizeVideoAsync(f, 720, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Resizing to 720p…"));
-                list.Add(Tool("rotate", "Rotate", Glyphs.Rotate, "Turn 90° clockwise", ctx => ForEach(ctx, (f, i) => MediaTools.RotateVideoAsync(f, true, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Rotating…"));
-                list.Add(Tool("snapshot", "Frame", Glyphs.Camera, "Save a still frame", ctx => ForEach(ctx, (f, i) => MediaTools.SnapshotAsync(f, null, ctx.Cancel)), working: "Grabbing a frame…"));
-                list.Add(Tool("normalize", "Loudness", Glyphs.Volume, "Even out the volume", ctx => ForEach(ctx, (f, i) => MediaTools.NormalizeAsync(f, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Normalizing…"));
-                if (many) list.Add(Tool("merge", "Merge", Glyphs.Merge, "Join clips in order", async ctx =>
+                list.Add(Tool("mute", "Mute", Glyphs.Mute, "Remove audio", ctx => ForEach(ctx, (f, i) => MediaTools.MuteAsync(f, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Removing audio…"));
+                list.Add(Tool("720p", "720p", Glyphs.Resize, "Scale to 720p", ctx => ForEach(ctx, (f, i) => MediaTools.ResizeVideoAsync(f, 720, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Resizing to 720p…"));
+                list.Add(Tool("rotate", "Rotate", Glyphs.Rotate, "90° clockwise", ctx => ForEach(ctx, (f, i) => MediaTools.RotateVideoAsync(f, true, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Rotating…"));
+                list.Add(Tool("snapshot", "Frame", Glyphs.Camera, "Still image", ctx => ForEach(ctx, (f, i) => MediaTools.SnapshotAsync(f, null, ctx.Cancel)), working: "Grabbing a frame…"));
+                list.Add(Tool("normalize", "Loudness", Glyphs.Volume, "Even volume", ctx => ForEach(ctx, (f, i) => MediaTools.NormalizeAsync(f, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Normalizing…"));
+                if (many) list.Add(Tool("merge", "Merge", Glyphs.Merge, "Join clips", async ctx =>
                     OpResult.Files(new[] { await MediaTools.MergeAsync(ctx.Files, p => ctx.Report(p), ctx.Cancel) }), working: "Merging clips…"));
                 break;
 
             case Group.Audio:
-                list.Add(Tool("compress", "Compress", Glyphs.Compress, "Reduce file size", async ctx =>
+                list.Add(Tool("compress", "Compress", Glyphs.Compress, "Smaller file", async ctx =>
                 {
                     var kbps = await ToolDialogs.AudioCompressAsync(ctx.Files);
                     if (kbps == null) return OpResult.Cancel();
@@ -128,33 +128,33 @@ public static partial class Catalog
                     return await ForEach(ctx, (f, i) => MediaTools.CompressAudioAsync(f, kbps.Value, p => ctx.ReportItem(i, p), ctx.Cancel));
                 }, interactive: true));
                 if (!many)
-                    list.Add(Tool("trim", "Trim", Glyphs.Cut, "Cut the start or end", async ctx =>
+                    list.Add(Tool("trim", "Trim", Glyphs.Cut, "Cut start or end", async ctx =>
                     {
                         var r = await ToolDialogs.TrimAsync(ctx.File);
                         if (r == null) return OpResult.Cancel();
                         ctx.BeginWork("Trimming…");
                         return OpResult.Files(new[] { await MediaTools.TrimAsync(ctx.File, r.Value.start, r.Value.end, p => ctx.Report(p), ctx.Cancel) });
                     }, interactive: true));
-                list.Add(Tool("normalize", "Loudness", Glyphs.Volume, "Even out the volume", ctx => ForEach(ctx, (f, i) => MediaTools.NormalizeAsync(f, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Normalizing…"));
-                list.Add(Tool("mono", "Mono", Glyphs.Speaker, "Mix down to one channel", ctx => ForEach(ctx, (f, i) => MediaTools.MonoAsync(f, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Mixing to mono…"));
+                list.Add(Tool("normalize", "Loudness", Glyphs.Volume, "Even volume", ctx => ForEach(ctx, (f, i) => MediaTools.NormalizeAsync(f, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Normalizing…"));
+                list.Add(Tool("mono", "Mono", Glyphs.Speaker, "One channel", ctx => ForEach(ctx, (f, i) => MediaTools.MonoAsync(f, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Mixing to mono…"));
                 list.Add(Tool("fade", "Fade", Glyphs.Audio, "Fade in and out", ctx => ForEach(ctx, (f, i) => MediaTools.FadeAsync(f, 2, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Adding fades…"));
-                if (many) list.Add(Tool("merge", "Merge", Glyphs.Merge, "Join tracks in order", async ctx =>
+                if (many) list.Add(Tool("merge", "Merge", Glyphs.Merge, "Join tracks", async ctx =>
                     OpResult.Files(new[] { await MediaTools.MergeAsync(ctx.Files, p => ctx.Report(p), ctx.Cancel) }), working: "Merging tracks…"));
                 break;
 
             case Group.Pdf:
-                if (many) list.Add(Tool("merge", "Merge", Glyphs.Merge, "Combine into one PDF", ctx => Task.Run(() => OpResult.Files(new[] { PdfTools.Merge(ctx.Files) })), working: "Merging PDFs…"));
-                list.Add(Tool("split", "Split", Glyphs.Split, "One PDF per page", ctx => ForEach(ctx, (f, i) => Task.Run(() => PdfTools.Split(f, p => ctx.ReportItem(i, p)))), working: "Splitting…"));
+                if (many) list.Add(Tool("merge", "Merge", Glyphs.Merge, "Into one PDF", ctx => Task.Run(() => OpResult.Files(new[] { PdfTools.Merge(ctx.Files) })), working: "Merging PDFs…"));
+                list.Add(Tool("split", "Split", Glyphs.Split, "PDF per page", ctx => ForEach(ctx, (f, i) => Task.Run(() => PdfTools.Split(f, p => ctx.ReportItem(i, p)))), working: "Splitting…"));
                 if (!many)
-                    list.Add(Tool("extract", "Pages", Glyphs.Pages, "Keep only some pages", async ctx =>
+                    list.Add(Tool("extract", "Pages", Glyphs.Pages, "Pick pages", async ctx =>
                     {
                         var pages = await ToolDialogs.PagesAsync(ctx.File);
                         if (pages == null) return OpResult.Cancel();
                         ctx.BeginWork("Extracting pages…");
                         return OpResult.Files(new[] { await Task.Run(() => PdfTools.ExtractPages(ctx.File, pages)) });
                     }, interactive: true));
-                list.Add(Tool("images", "Images", Glyphs.Photo, "Save embedded images", ctx => ForEachMany(ctx, (f, i) => Task.Run(() => PdfTools.ExtractImages(f, p => ctx.ReportItem(i, p)))), working: "Extracting images…"));
-                list.Add(Tool("compress", "Compress", Glyphs.Compress, "Flatten pages to shrink", ctx => ForEach(ctx, (f, i) => PdfTools.FlattenCompressAsync(f, 150, 72, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Compressing PDF…"));
+                list.Add(Tool("images", "Images", Glyphs.Photo, "Save images", ctx => ForEachMany(ctx, (f, i) => Task.Run(() => PdfTools.ExtractImages(f, p => ctx.ReportItem(i, p)))), working: "Extracting images…"));
+                list.Add(Tool("compress", "Compress", Glyphs.Compress, "Shrink file", ctx => ForEach(ctx, (f, i) => PdfTools.FlattenCompressAsync(f, 150, 72, p => ctx.ReportItem(i, p), ctx.Cancel)), working: "Compressing PDF…"));
                 AddTextTools(list);
                 break;
 
@@ -169,8 +169,8 @@ public static partial class Catalog
                 break;
 
             case Group.Folder:
-                list.Add(Tool("zip", "Zip", Glyphs.Package, "Compress into ZIP", async ctx => OpResult.Files(new[] { await ArchiveConverter.CreateAsync(ctx.Files, "zip", p => ctx.Report(p), ctx.Cancel) }), working: "Zipping…"));
-                list.Add(Tool("info", "Size", Glyphs.Info, "Count files and size", ctx => Task.Run(() =>
+                list.Add(Tool("zip", "Zip", Glyphs.Package, "Make a ZIP", async ctx => OpResult.Files(new[] { await ArchiveConverter.CreateAsync(ctx.Files, "zip", p => ctx.Report(p), ctx.Cancel) }), working: "Zipping…"));
+                list.Add(Tool("info", "Size", Glyphs.Info, "Folder size", ctx => Task.Run(() =>
                 {
                     long bytes = 0; int count = 0;
                     foreach (var dir in ctx.Files)
@@ -184,7 +184,7 @@ public static partial class Catalog
         }
 
         if (many && group != Group.Folder && list.All(i => i.Id != "tool:zip"))
-            list.Add(Tool("zip", "Zip", Glyphs.Package, "Compress all into one ZIP", async ctx =>
+            list.Add(Tool("zip", "Zip", Glyphs.Package, "One ZIP file", async ctx =>
                 OpResult.Files(new[] { await ArchiveConverter.CreateAsync(ctx.Files, "zip", p => ctx.Report(p), ctx.Cancel) }), working: "Zipping…"));
         return list;
     }
@@ -198,7 +198,7 @@ public static partial class Catalog
             await FileActions.SetClipboardTextAsync(text);
             return OpResult.Done("Text copied", $"{DocTools.Count(text).words:N0} words on the clipboard");
         }, working: "Reading text…"));
-        list.Add(Tool("count", "Count", Glyphs.Text, "Words and reading time", async ctx =>
+        list.Add(Tool("count", "Count", Glyphs.Text, "Word count", async ctx =>
         {
             var text = string.Join("\n", await Task.Run(() => ctx.Files.Select(DocTools.ExtractText).ToList()));
             var (words, chars, _, reading) = DocTools.Count(text);

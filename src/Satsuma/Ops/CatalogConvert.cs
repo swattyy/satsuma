@@ -47,7 +47,9 @@ public static partial class Catalog
             case Group.Video:
                 return MediaConverter.VideoTargets.Where(t => Self(t) == null && !(t == "mp4" && only == "m4v"))
                     .Select(t => Item(t, (f, ctx, i) => MediaConverter.ConvertAsync(f, t, p => ctx.ReportItem(i, p), ctx.Cancel),
-                        caption: t == "mp3" ? "Extract audio as" : "Convert to")).ToList();
+                        caption: t == "mp3" ? "Extract audio" : "Convert to",
+                        dropText: t == "mp3" ? "Extract audio as %1" : null,
+                        working: t == "mp3" ? "Extracting audio…" : null)).ToList();
             case Group.Audio:
                 return MediaConverter.AudioTargets.Where(t => Self(t) == null)
                     .Select(t => Item(t, (f, ctx, i) => MediaConverter.ConvertAsync(f, t, p => ctx.ReportItem(i, p), ctx.Cancel))).ToList();
@@ -131,7 +133,8 @@ public static partial class Catalog
     }
 
     /// <summary>A convert segment that runs <paramref name="convert"/> on each file in turn.</summary>
-    static WheelItem Item(string target, Func<string, OpContext, int, Task<string>> convert, string caption = "Convert to", string? label = null)
+    static WheelItem Item(string target, Func<string, OpContext, int, Task<string>> convert, string caption = "Convert to", string? label = null,
+        string? dropText = null, string? working = null)
     {
         string lbl = label ?? target.ToUpperInvariant();
         return new WheelItem
@@ -139,8 +142,8 @@ public static partial class Catalog
             Id = "convert:" + target,
             Label = lbl,
             Caption = caption,
-            DropText = caption == "Convert to" ? "Convert to %1" : caption + " %1",
-            WorkingTitle = (caption == "Convert to" ? "Converting to " : caption + " ") + lbl + "…",
+            DropText = dropText ?? (caption == "Convert to" ? "Convert to %1" : caption + " %1"),
+            WorkingTitle = working ?? ((caption == "Convert to" ? "Converting to " : caption + " ") + lbl + "…"),
             Run = ctx => ForEach(ctx, (f, i) => convert(f, ctx, i)),
         };
     }

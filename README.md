@@ -13,7 +13,7 @@ Inspired by [Tangerine](https://tangerineformac.com/) on macOS. This is a separa
 
 ## Download
 
-Grab `Satsuma-Setup-1.0.0.exe` from the [releases page](https://github.com/swattyy/satsuma/releases) and run it. It installs for your account (no admin needed), adds Satsuma to the Start menu and opens it. Uninstall it from Settings > Apps like any other app.
+Grab the latest `Satsuma-Setup` .exe from the [releases page](https://github.com/swattyy/satsuma/releases/latest) and run it. It installs for your account (no admin needed), adds Satsuma to the Start menu and opens it. Uninstall it from Settings > Apps like any other app.
 
 Windows will probably warn you the first time because the installer isn't signed. Click "More info" and then "Run anyway".
 

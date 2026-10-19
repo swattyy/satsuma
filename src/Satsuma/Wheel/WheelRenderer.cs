@@ -250,25 +250,45 @@ public sealed class WheelRenderer
         {
             using var iconFont = new SKFont(Type.Icons, 21f * L.S) { Subpixel = true, Edging = SKFontEdging.Antialias };
             using var labelFont = new SKFont(Type.Semibold, 10.5f * L.S) { Subpixel = true, Edging = SKFontEdging.Antialias };
-            Shrink(labelFont, label, maxW, 8f * L.S);
+            var (text, spacing) = Fit(labelFont, label, maxW, 8f * L.S, 0.5f * L.S);
             _text.Color = color;
             c.DrawText(item.Glyph, 0, -1.5f * L.S, SKTextAlign.Center, iconFont, _text);
-            DrawSpaced(c, label, 0, 15f * L.S, labelFont, _text, 0.5f * L.S);
+            DrawSpaced(c, text, 0, 15f * L.S, labelFont, _text, spacing);
         }
         else
         {
             using var font = new SKFont(Type.Bold, (n > 8 ? 13.5f : 15f) * L.S) { Subpixel = true, Edging = SKFontEdging.Antialias };
-            Shrink(font, label, maxW, 9f * L.S);
+            var (text, spacing) = Fit(font, label, maxW, 9f * L.S, 0.6f * L.S);
             _text.Color = color;
             font.GetFontMetrics(out var m);
             float y = -(m.Ascent + m.Descent) / 2f;
-            DrawSpaced(c, label, 0, y, font, _text, 0.6f * L.S);
+            DrawSpaced(c, text, 0, y, font, _text, spacing);
         }
     }
 
-    static void Shrink(SKFont font, string text, float maxWidth, float minSize)
+    /// <summary>Width of text as <see cref="DrawSpaced"/> lays it out.</summary>
+    static float MeasureSpaced(string text, SKFont font, float spacing)
     {
-        while (font.Size > minSize && font.MeasureText(text) > maxWidth) font.Size -= 0.5f;
+        if (spacing <= 0.01f || text.Length < 2) return font.MeasureText(text);
+        float total = spacing * (text.Length - 1);
+        foreach (var ch in text) total += font.MeasureText(ch.ToString());
+        return total;
+    }
+
+    /// <summary>
+    /// Makes text fit <paramref name="maxWidth"/>: first tightens the letter spacing, then shrinks the font
+    /// down to <paramref name="minSize"/>, and only then cuts it short with an ellipsis.
+    /// </summary>
+    static (string text, float spacing) Fit(SKFont font, string text, float maxWidth, float minSize, float spacing)
+    {
+        if (maxWidth <= 0 || MeasureSpaced(text, font, spacing) <= maxWidth) return (text, spacing);
+        float sp = spacing;
+        while (sp > 0.01f && MeasureSpaced(text, font, sp) > maxWidth) sp = MathF.Max(0, sp - spacing * 0.25f);
+        while (font.Size > minSize && MeasureSpaced(text, font, sp) > maxWidth) font.Size = MathF.Max(minSize, font.Size - 0.5f);
+        if (MeasureSpaced(text, font, sp) <= maxWidth) return (text, sp);
+        string cut = text;
+        while (cut.Length > 1 && MeasureSpaced(cut + "…", font, sp) > maxWidth) cut = cut[..^1];
+        return (cut.TrimEnd() + "…", sp);
     }
 
     /// <summary>Draws centered text with extra letter spacing.</summary>
@@ -324,23 +344,32 @@ public sealed class WheelRenderer
     {
         if (alpha <= 0.01f) return;
         var L = st.Layout;
-        float maxW = r * 1.72f;
+        // Fit against the resting hub so text doesn't change size while the hub pops in.
+        float hub = L.RHub, pad = 9f * L.S;
         using var capFont = new SKFont(Type.Semibold, 9f * L.S) { Subpixel = true, Edging = SKFontEdging.Antialias };
         using var titleFont = new SKFont(Type.Bold, 17f * L.S) { Subpixel = true, Edging = SKFontEdging.Antialias };
         string caption = t.Caption.ToUpperInvariant();
-        Shrink(capFont, caption, maxW, 7f * L.S);
-        Shrink(titleFont, t.Title, maxW, 10f * L.S);
         bool hasCaption = caption.Length > 0;
-        float titleY = L.Cy + dy + (hasCaption ? 10f : 6f) * L.S;
+        float capBase = -9f * L.S, titleBase = (hasCaption ? 10f : 6f) * L.S;
+
+        // A line can only be as wide as the circle is at that line's farthest edge from the center.
+        static float Chord(float radius, float offset) => offset >= radius ? 0 : 2f * MathF.Sqrt(radius * radius - offset * offset);
+        capFont.GetFontMetrics(out var cm);
+        titleFont.GetFontMetrics(out var tm);
+        float capRoom = Chord(hub, MathF.Abs(capBase - cm.CapHeight)) - 2 * pad;
+        float titleRoom = Chord(hub, MathF.Max(MathF.Abs(titleBase + tm.Ascent * 0.85f), titleBase + tm.Descent)) - 2 * pad;
+        var (capText, capSpacing) = Fit(capFont, caption, capRoom, 7f * L.S, 1.1f * L.S);
+        var (titleText, _) = Fit(titleFont, t.Title, titleRoom, 10.5f * L.S, 0);
+
         var secondary = dark ? new SKColor(176, 168, 160) : new SKColor(125, 116, 108);
         var primary = dark ? new SKColor(246, 242, 238) : new SKColor(38, 32, 28);
         if (hasCaption)
         {
             _text.Color = secondary.WithAlpha((byte)(255 * alpha));
-            DrawSpaced(c, caption, L.Cx, L.Cy + dy - 9f * L.S, capFont, _text, 1.1f * L.S);
+            DrawSpaced(c, capText, L.Cx, L.Cy + dy + capBase, capFont, _text, capSpacing);
         }
         _text.Color = (t.Accent ? (dark ? AccentLight : AccentDeep) : primary).WithAlpha((byte)(255 * alpha));
-        c.DrawText(t.Title, L.Cx, titleY, SKTextAlign.Center, titleFont, _text);
+        c.DrawText(titleText, L.Cx, L.Cy + dy + titleBase, SKTextAlign.Center, titleFont, _text);
     }
 
     // ---- key hint chips under the wheel ----

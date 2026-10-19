@@ -18,7 +18,7 @@
     <Authors>swattyy</Authors>
     <Copyright>Copyright (c) 2026 swattyy</Copyright>
     <Description>Drag a file, tap Shift, drop. A zero-click offline file converter for Windows.</Description>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <TieredPGO>true</TieredPGO>
     <!-- WPF0001: Fluent ThemeMode is marked experimental. CA1416: platform checks are covered by SupportedOSPlatformVersion. -->

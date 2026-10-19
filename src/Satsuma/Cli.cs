@@ -196,6 +196,9 @@ public static class Cli
         var mov = Make("weekend.mov", 148_000_000);
         var folder = Path.Combine(samples, "Project");
         Directory.CreateDirectory(folder);
+        var longFolder = Path.Combine(samples, "Vacation photos from summer 2024 (backup copy)");
+        Directory.CreateDirectory(longFolder);
+        var unknown = Make("firmware.bin", 4_000);
 
         float scale = 2f;
         var layout = new WheelLayout(scale, true);
@@ -211,6 +214,18 @@ public static class Cli
             ("tools-jpg-dark", WheelKind.Tools, new[] { jpg }, 0, 1f, true),
             ("actions-hover", WheelKind.Actions, new[] { jpg }, 1, 1f, false),
             ("folder-convert", WheelKind.Convert, new[] { folder }, -1, 1f, false),
+            // Text-fit stress cases for the center circle.
+            ("fit-actions-share", WheelKind.Actions, new[] { jpg }, 0, 1f, true),
+            ("fit-actions-openwith", WheelKind.Actions, new[] { jpg }, 6, 1f, false),
+            ("fit-tools-metadata", WheelKind.Tools, new[] { jpg }, 4, 1f, false),
+            ("fit-tools-redact", WheelKind.Tools, new[] { jpg }, 6, 1f, true),
+            ("fit-tools-background", WheelKind.Tools, new[] { jpg }, 7, 1f, false),
+            ("fit-tools-trim", WheelKind.Tools, new[] { mov }, 1, 1f, false),
+            ("fit-tools-pdf-pages", WheelKind.Tools, new[] { pdf }, 1, 1f, true),
+            ("fit-tools-multi-zip", WheelKind.Tools, new[] { jpg, pdf, mov }, 0, 1f, false),
+            ("fit-convert-mp3", WheelKind.Convert, new[] { mov }, 6, 1f, false),
+            ("fit-long-folder", WheelKind.Convert, new[] { longFolder }, -1, 1f, false),
+            ("fit-empty-tools", WheelKind.Tools, new[] { unknown }, -1, 1f, true),
         };
         foreach (var (name, kind, files, hover, t, dark) in cases)
         {
