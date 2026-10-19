@@ -6,7 +6,7 @@ import SatsumaCore
 /// Each dialog calls `finish(value)` to run the tool, or `finish(nil)` (or closes the window) to cancel.
 @MainActor
 enum ToolDialog {
-    final class Session: NSObject, NSWindowDelegate {
+    @MainActor final class Session: NSObject, NSWindowDelegate {
         var window: NSWindow?
         var onClose: (() -> Void)?
         func close() {

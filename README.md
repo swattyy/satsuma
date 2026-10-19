@@ -2,14 +2,14 @@
 
 Convert files while you're dragging them. Start dragging a file, tap Shift, and drop it on the format you want. The converted copy shows up next to the original.
 
-Windows 10 and 11. Everything runs locally, nothing is uploaded.
+Windows 10 and 11, and macOS 13 or later ([macOS notes](#macos)). Everything runs locally, nothing is uploaded.
 
 <p align="center">
   <img src="docs/wheel-convert.png" width="380" alt="Convert wheel for a JPG with WEBP highlighted">
   <img src="docs/wheel-tools-dark.png" width="380" alt="Tools wheel in dark mode">
 </p>
 
-Inspired by [Tangerine](https://tangerineformac.com/) on macOS. This is a separate Windows project and isn't affiliated with it.
+Inspired by [Tangerine](https://tangerineformac.com/) on macOS. Satsuma is a separate project and isn't affiliated with it.
 
 ## Download
 
@@ -102,9 +102,46 @@ There are some command line switches for testing without touching the mouse:
 
 Add `--result out.json` to any of them to get the result as JSON.
 
+## macOS
+
+The Mac version (in [`mac/`](mac)) works the same way, with Shift for Convert, Command for Tools and Option for Actions (you can change them in Settings). It needs macOS 13 or later and runs natively on Apple silicon and Intel Macs.
+
+### Installing on a Mac
+
+1. Download `Satsuma-<version>-mac.dmg` from the [releases page](https://github.com/swattyy/satsuma/releases/latest), open it and drag Satsuma into Applications.
+2. Open Satsuma. The app isn't signed with an Apple Developer ID, so macOS blocks it the first time:
+   - macOS 15 and later: open System Settings > Privacy & Security, scroll down to the message about Satsuma and click "Open Anyway", then confirm.
+   - macOS 13 and 14: right-click Satsuma in Applications, choose Open, then click Open again.
+3. Turn on Satsuma in System Settings > Privacy & Security > Accessibility when the welcome window asks. Satsuma only uses it to notice the key you tap while you're dragging. Because the app isn't signed, macOS may ask for this again after you install an update.
+
+Satsuma sits in the menu bar and has no Dock icon. Its menu has Pause, Open Shelf, How It Works, Settings and Quit.
+
+What the Mac version uses:
+
+- Images go through ImageIO, which reads HEIC, AVIF, WebP and camera RAW without any extras. WebP and AVIF output need FFmpeg.
+- MP4, MOV, M4A, WAV, AIFF and FLAC are handled by AVFoundation and Core Audio, with hardware video encoding. MP3, OGG, OPUS and WMA output, MKV, WEBM, AVI and WMV, and the loudness tool need FFmpeg. Settings > Engines runs `brew install ffmpeg` if you have [Homebrew](https://brew.sh).
+- Documents use the same engine as TextEdit, so DOCX, DOC, RTF and ODT work both ways without Word. PDFs are printed with WebKit.
+- Slides, XLS/XLSB, WordPerfect and PDF to PPTX need [LibreOffice](https://www.libreoffice.org); without it those segments stay hidden.
+- OCR and face detection use Vision.
+
+### Building the Mac version
+
+You need Xcode 15 or later.
+
+```
+cd mac
+swift build
+swift test
+scripts/build-app.sh
+```
+
+`build-app.sh` writes `build/Satsuma.app` and `build/Satsuma-<version>-mac.dmg` (the version is in `mac/VERSION`). It signs ad hoc by default. With a Developer ID, set `SIGN_ID="Developer ID Application: Your Name (TEAMID)"`, and to notarize, also set `NOTARY_PROFILE` to a profile saved with `xcrun notarytool store-credentials`.
+
+The command line switches above work on the Mac too (`Satsuma.app/Contents/MacOS/Satsuma --convert webp photo.jpg`), plus `--make-samples <dir>` to write test files and `--engines all|none` to make `--list` pretend LibreOffice is or isn't there. `swift test` checks that every wheel matches the Windows app, using lists recorded from `Satsuma.exe --list` in `mac/Tests/Fixtures`. The `mac` GitHub Actions workflow builds the app, runs the conversions on sample files, renders the wheel, bubble and dialogs to PNGs and uploads the disk image.
+
 ## Privacy
 
-Satsuma doesn't make network requests. The only download is FFmpeg, and only if you click its install button. The log is at `%LOCALAPPDATA%\Satsuma\satsuma.log` and settings are in `%APPDATA%\Satsuma\settings.json`.
+Satsuma doesn't make network requests. The only download is FFmpeg, and only if you click its install button. On Windows the log is at `%LOCALAPPDATA%\Satsuma\satsuma.log` and settings are in `%APPDATA%\Satsuma\settings.json`. On a Mac they're at `~/Library/Logs/Satsuma/satsuma.log` and `~/Library/Application Support/Satsuma/settings.json`.
 
 ## Known issues
 
@@ -112,7 +149,8 @@ Satsuma doesn't make network requests. The only download is FFmpeg, and only if 
 - ODT output needs Word, and slide conversions need PowerPoint.
 - Windows doesn't let apps running as admin drag into normal apps, so drags from an elevated window won't reach the wheel unless Satsuma also runs as admin.
 - Builds aren't code-signed, so SmartScreen warns about them, and Smart App Control may block them on some PCs.
+- On a Mac, Windows' "Convert to PNG" text under the dragged icon has no equivalent; the center of the wheel shows the same thing.
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Uses [SkiaSharp](https://github.com/mono/SkiaSharp) (MIT), [PdfPig](https://github.com/UglyToad/PdfPig) (Apache 2.0) and [Markdig](https://github.com/xoofx/markdig) (BSD 2-Clause). FFmpeg isn't bundled. Full notices are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+MIT, see [LICENSE](LICENSE). The Windows app uses [SkiaSharp](https://github.com/mono/SkiaSharp) (MIT), [PdfPig](https://github.com/UglyToad/PdfPig) (Apache 2.0) and [Markdig](https://github.com/xoofx/markdig) (BSD 2-Clause). The Mac app only uses Apple's frameworks. FFmpeg isn't bundled. Full notices are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
