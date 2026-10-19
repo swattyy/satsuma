@@ -36,6 +36,9 @@ public enum ImageConverter {
     public static var readableTypes: [String] { (CGImageSourceCopyTypeIdentifiers() as? [String]) ?? [] }
     static func canWrite(_ typeId: String) -> Bool { writableTypes.contains(typeId) }
 
+    /// WebP output works natively or through an FFmpeg build with libwebp.
+    public static var canWriteWebP: Bool { canWrite("org.webmproject.webp") || Ffmpeg.hasEncoder("libwebp") }
+
     // ------------------------------------------------------------------ decode
 
     public static func decode(_ path: String) async throws -> DecodedImage {

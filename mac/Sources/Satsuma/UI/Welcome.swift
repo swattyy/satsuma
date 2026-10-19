@@ -63,6 +63,8 @@ final class WelcomeModel: ObservableObject {
 struct WelcomeView: View {
     @StateObject private var m = WelcomeModel()
     private let sample = Welcome.samplePicture()
+    // WebP like on Windows when this Mac can write it; without FFmpeg it can't, so the practice run would fail.
+    private let target = ImageConverter.canWriteWebP ? "WEBP" : "JPG"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -106,7 +108,7 @@ struct WelcomeView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Try it now").bold()
                     Text(m.practiced ? "Nice. Converted files show up next to the original. Click the bubble to see it in Finder."
-                                     : "Drag this picture a little, tap \(Settings.current.convertKey.title), then drop it on WEBP.")
+                                     : "Drag this picture a little, tap \(Settings.current.convertKey.title), then drop it on \(target).")
                         .font(.callout).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
