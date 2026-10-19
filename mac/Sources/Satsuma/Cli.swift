@@ -11,7 +11,7 @@ import SatsumaCore
 ///   --render-test <dir>             render wheel frames and bubbles to PNG
 /// Add --result out.json to any of them to get the result as JSON.
 enum Cli {
-    static let verbs: Set<String> = ["--convert", "--tool", "--list", "--selftest", "--make-samples", "--render-test", "--render-ui", "--make-icon"]
+    static let verbs: Set<String> = ["--convert", "--tool", "--list", "--selftest", "--make-samples", "--render-test", "--render-ui", "--make-icon", "--demo-wheel"]
 
     static func handles(_ args: [String]) -> Bool { args.first.map(verbs.contains) ?? false }
 
@@ -67,6 +67,16 @@ enum Cli {
             case "--make-samples":
                 guard let dir = rest.first else { throw OpError("Usage: --make-samples <dir>") }
                 result["files"] = try await Samples.make(in: P.full(dir))
+                result["ok"] = true
+            case "--demo-wheel":
+                // Shows the live wheel at the pointer for a few seconds, without a drag (puts a window on screen).
+                let kind = rest.first.flatMap { k in WheelKind.allCases.first { $0.rawValue.lowercased() == k.lowercased() } } ?? .convert
+                let ms = rest.count > 1 ? Int(rest[1]) ?? 4000 : 4000
+                await MainActor.run {
+                    Runtime.isTestMode = false
+                    WheelController.shared.open(kind, at: NSEvent.mouseLocation, files: DragFiles.Snapshot(paths: [Welcome.samplePicture()], promised: false))
+                }
+                try await Task.sleep(nanoseconds: UInt64(ms) * 1_000_000)
                 result["ok"] = true
             case "--make-icon":
                 guard let dir = rest.first else { throw OpError("Usage: --make-icon <dir.iconset>") }

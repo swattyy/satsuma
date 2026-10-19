@@ -1,4 +1,5 @@
 import AppKit
+import QuickLookThumbnailing
 import SatsumaCore
 
 /// A small floating shelf for parking files: drop files on it (or use the Float action), then drag them out
@@ -6,7 +7,7 @@ import SatsumaCore
 final class Shelf: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate {
     static let shared = Shelf()
 
-    struct Entry { let path: String; let name: String; let detail: String; let icon: NSImage }
+    struct Entry { let path: String; let name: String; let detail: String; var icon: NSImage }
 
     private var panel: NSPanel?
     private var table: NSTableView?
@@ -27,7 +28,22 @@ final class Shelf: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSWindo
         let detail = P.isDir(path) ? "Folder" : P.isFile(path) ? FileKinds.humanSize(P.size(path)) : ""
         let icon = NSWorkspace.shared.icon(forFile: path)
         icon.size = NSSize(width: 32, height: 32)
+        loadThumbnail(path)
         return Entry(path: path, name: P.fileName(path), detail: detail, icon: icon)
+    }
+
+    /// Finder-quality previews (photos, video frames, PDF pages) replace the generic icon when they're ready.
+    private func loadThumbnail(_ path: String) {
+        let request = QLThumbnailGenerator.Request(fileAt: URL(fileURLWithPath: path), size: CGSize(width: 32, height: 32), scale: 2,
+                                                   representationTypes: .thumbnail)
+        QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { [weak self] rep, _ in
+            guard let image = rep?.nsImage else { return }
+            DispatchQueue.main.async {
+                guard let self, let i = self.items.firstIndex(where: { $0.path == path }) else { return }
+                self.items[i].icon = image
+                self.table?.reloadData(forRowIndexes: IndexSet(integer: i), columnIndexes: IndexSet(integer: 0))
+            }
+        }
     }
 
     private func build(near anchor: CGPoint) {
