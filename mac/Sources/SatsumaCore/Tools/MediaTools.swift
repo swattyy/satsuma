@@ -123,7 +123,11 @@ public enum MediaTools {
         if let mh = o.maxHeight, let v = info.video, v.height > mh { scale = ["-vf", "scale=-2:\(mh)"] }
         else { scale = ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"] }
         let ext = FileKinds.ext(input) == "webm" ? "webm" : "mp4"
-        let audio = info.audio == nil ? ["-an"] : ext == "webm" ? ["-c:a", "libopus", "-b:a", "\(o.audioKbps)k"] : ["-c:a", "aac", "-b:a", "\(o.audioKbps)k"]
+        let audio: [String]
+        if info.audio == nil { audio = ["-an"] }
+        else if ext == "webm" { audio = ["-c:a", "libopus", "-b:a", "\(o.audioKbps)k"] }
+        else { audio = ["-c:a", "aac", "-b:a", "\(o.audioKbps)k"] }
+        let inArgs: [String] = ["-i", input]
         if let target = o.targetBytes, info.duration > 0 {
             // Two-pass ABR to hit a size.
             let totalKbps = Double(target) * 8 / 1000 / info.duration * 0.96
@@ -131,19 +135,21 @@ public enum MediaTools {
             let tmp = try AppPaths.newTempDir("2pass")
             defer { P.remove(tmp) }
             let log = P.join(tmp, "pass")
-            let codec = ext == "webm" ? ["-c:v", "libvpx-vp9", "-row-mt", "1", "-cpu-used", "4"] : ["-c:v", "libx264", "-preset", "medium", "-pix_fmt", "yuv420p"]
+            let codec: [String] = ext == "webm" ? ["-c:v", "libvpx-vp9", "-row-mt", "1", "-cpu-used", "4"] : ["-c:v", "libx264", "-preset", "medium", "-pix_fmt", "yuv420p"]
+            let rate: [String] = ["-b:v", "\(videoKbps)k"]
             let output = OutputPaths.path(for: input, ext: ext, suffix: " (compressed)")
             return try await OutputPaths.writing(output) { out in
-                try await Ffmpeg.run(["-i", input] + scale + codec + ["-b:v", "\(videoKbps)k", "-pass", "1", "-passlogfile", log, "-an", "-f", "null", "/dev/null"],
-                                     duration: info.duration) { progress($0 * 0.5) }
-                try await Ffmpeg.run(["-i", input] + scale + codec + ["-b:v", "\(videoKbps)k", "-pass", "2", "-passlogfile", log] + audio
-                                     + ["-movflags", "+faststart", out], duration: info.duration) { progress(0.5 + $0 * 0.5) }
+                let pass1: [String] = ["-pass", "1", "-passlogfile", log, "-an", "-f", "null", "/dev/null"]
+                let pass2: [String] = ["-pass", "2", "-passlogfile", log]
+                let tail: [String] = ["-movflags", "+faststart", out]
+                try await Ffmpeg.run(cat(inArgs, scale, codec, rate, pass1), duration: info.duration) { progress($0 * 0.5) }
+                try await Ffmpeg.run(cat(inArgs, scale, codec, rate, pass2, audio, tail), duration: info.duration) { progress(0.5 + $0 * 0.5) }
                 return out
             }
         }
-        return try await ffmpeg(input, suffix: " (compressed)", ext: ext,
-                                ["-i", "{in}", "-map", "0:v:0", "-map", "0:a?"] + scale + videoCodecArgs(ext, crf: o.crf) + audio + ["-movflags", "+faststart", "{out}"],
-                                progress: progress)
+        let head: [String] = ["-i", "{in}", "-map", "0:v:0", "-map", "0:a?"]
+        let tail: [String] = ["-movflags", "+faststart", "{out}"]
+        return try await ffmpeg(input, suffix: " (compressed)", ext: ext, cat(head, scale, videoCodecArgs(ext, crf: o.crf), audio, tail), progress: progress)
     }
 
     public static func compressAudio(_ input: String, kbps: Int, progress: @escaping (Double) -> Void) async throws -> String {
@@ -166,7 +172,7 @@ public enum MediaTools {
         case "m4a": codec = ["-c:a", "aac", "-b:a", "\(kbps)k"]
         default: codec = ["-c:a", "libmp3lame", "-b:a", "\(kbps)k"]
         }
-        return try await ffmpeg(input, suffix: " (compressed)", ext: ext, ["-i", "{in}", "-map", "0:a:0", "-map_metadata", "0"] + codec + ["{out}"], progress: progress)
+        return try await ffmpeg(input, suffix: " (compressed)", ext: ext, cat(["-i", "{in}", "-map", "0:a:0", "-map_metadata", "0"], codec, ["{out}"]), progress: progress)
     }
 
     // ------------------------------------------------------------------ trim / edit
@@ -197,10 +203,14 @@ public enum MediaTools {
             }
         }
         let ext = plan.ext
-        let r = ["-ss", f(start), "-to", f(end)]
-        let args = audio
-            ? r + ["-i", "{in}", "-map", "0:a:0", "-map_metadata", "0"] + audioCodecArgs(ext) + ["{out}"]
-            : r + ["-i", "{in}", "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "0"] + videoCodecArgs(ext, crf: 19) + audioCodecArgs(ext) + ["-movflags", "+faststart", "{out}"]
+        let r: [String] = ["-ss", f(start), "-to", f(end)]
+        let args: [String]
+        if audio {
+            args = cat(r, ["-i", "{in}", "-map", "0:a:0", "-map_metadata", "0"], audioCodecArgs(ext), ["{out}"])
+        } else {
+            args = cat(r, ["-i", "{in}", "-map", "0:v:0", "-map", "0:a?", "-map_metadata", "0"], videoCodecArgs(ext, crf: 19), audioCodecArgs(ext),
+                       ["-movflags", "+faststart", "{out}"])
+        }
         return try await ffmpeg(input, suffix: " (trimmed)", ext: ext, args, progress: progress, duration: end - start)
     }
 
@@ -238,9 +248,9 @@ public enum MediaTools {
                 return out
             }
         }
-        return try await ffmpeg(input, suffix: " (\(height)p)", ext: plan.ext,
-                                ["-i", "{in}", "-map", "0:v:0", "-map", "0:a?", "-vf", "scale=-2:\(height)"] + videoCodecArgs(plan.ext) + ["-c:a", "copy", "-movflags", "+faststart", "{out}"],
-                                progress: progress)
+        let head: [String] = ["-i", "{in}", "-map", "0:v:0", "-map", "0:a?", "-vf", "scale=-2:\(height)"]
+        let tail: [String] = ["-c:a", "copy", "-movflags", "+faststart", "{out}"]
+        return try await ffmpeg(input, suffix: " (\(height)p)", ext: plan.ext, cat(head, videoCodecArgs(plan.ext), tail), progress: progress)
     }
 
     /// Native rotation only changes the track's orientation matrix, so it's instant and lossless.
@@ -271,9 +281,9 @@ public enum MediaTools {
                 return out
             }
         }
-        return try await ffmpeg(input, suffix: " (rotated)", ext: plan.ext,
-                                ["-i", "{in}", "-map", "0:v:0", "-map", "0:a?", "-vf", "transpose=\(clockwise ? 1 : 2)"] + videoCodecArgs(plan.ext, crf: 19)
-                                + ["-c:a", "copy", "-movflags", "+faststart", "{out}"], progress: progress)
+        let head: [String] = ["-i", "{in}", "-map", "0:v:0", "-map", "0:a?", "-vf", "transpose=\(clockwise ? 1 : 2)"]
+        let tail: [String] = ["-c:a", "copy", "-movflags", "+faststart", "{out}"]
+        return try await ffmpeg(input, suffix: " (rotated)", ext: plan.ext, cat(head, videoCodecArgs(plan.ext, crf: 19), tail), progress: progress)
     }
 
     public static func snapshot(_ input: String, at: Double?) async throws -> String {
@@ -296,10 +306,10 @@ public enum MediaTools {
         if !Ffmpeg.available { throw OpError("Loudness needs FFmpeg. Open Satsuma Settings > Engines to install it.") }
         let audio = isAudioOnly(input)
         let ext = keepExt(input, audio: audio)
-        let maps = audio ? ["-map", "0:a:0"] : ["-map", "0:v:0?", "-map", "0:a", "-c:v", "copy"]
+        let maps: [String] = audio ? ["-map", "0:a:0"] : ["-map", "0:v:0?", "-map", "0:a", "-c:v", "copy"]
+        let filter: [String] = ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000"]
         return try await ffmpeg(input, suffix: " (normalized)", ext: ext,
-                                ["-i", "{in}"] + maps + ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000"] + audioCodecArgs(ext) + ["-map_metadata", "0", "{out}"],
-                                progress: progress)
+                                cat(["-i", "{in}"], maps, filter, audioCodecArgs(ext), ["-map_metadata", "0", "{out}"]), progress: progress)
     }
 
     public static func mono(_ input: String, progress: @escaping (Double) -> Void) async throws -> String {
@@ -314,8 +324,8 @@ public enum MediaTools {
                 return out
             }
         }
-        return try await ffmpeg(input, suffix: " (mono)", ext: plan.ext, ["-i", "{in}", "-map", "0:a:0", "-ac", "1"] + audioCodecArgs(plan.ext) + ["-map_metadata", "0", "{out}"],
-                                progress: progress)
+        return try await ffmpeg(input, suffix: " (mono)", ext: plan.ext,
+                                cat(["-i", "{in}", "-map", "0:a:0", "-ac", "1"], audioCodecArgs(plan.ext), ["-map_metadata", "0", "{out}"]), progress: progress)
     }
 
     public static func fade(_ input: String, seconds: Double, progress: @escaping (Double) -> Void) async throws -> String {
@@ -345,9 +355,9 @@ public enum MediaTools {
         let info = Ffmpeg.probe(input)
         let d = min(seconds, max(0.1, info.duration / 4))
         let outStart = max(0, info.duration - d)
+        let fades = "afade=t=in:d=\(f(d)),afade=t=out:st=\(f(outStart)):d=\(f(d))"
         return try await ffmpeg(input, suffix: " (faded)", ext: plan.ext,
-                                ["-i", "{in}", "-map", "0:a:0", "-af", "afade=t=in:d=\(f(d)),afade=t=out:st=\(f(outStart)):d=\(f(d))"] + audioCodecArgs(plan.ext)
-                                + ["-map_metadata", "0", "{out}"], progress: progress)
+                                cat(["-i", "{in}", "-map", "0:a:0", "-af", fades], audioCodecArgs(plan.ext), ["-map_metadata", "0", "{out}"]), progress: progress)
     }
 
     // ------------------------------------------------------------------ merge
@@ -381,10 +391,11 @@ public enum MediaTools {
             }
             filter = parts.joined(separator: ";") + ";" + files.indices.map { "[v\($0)][a\($0)]" }.joined() + "concat=n=\(files.count):v=1:a=1[v][a]"
         }
-        let maps = audio ? ["-map", "[a]"] : ["-map", "[v]", "-map", "[a]"]
-        let codecs = audio ? audioCodecArgs(ext) : videoCodecArgs("mp4") + ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
+        let maps: [String] = audio ? ["-map", "[a]"] : ["-map", "[v]", "-map", "[a]"]
+        let codecs: [String] = audio ? audioCodecArgs(ext) : cat(videoCodecArgs("mp4"), ["-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"])
+        let graph: [String] = ["-filter_complex", filter]
         return try await OutputPaths.writing(output) { out in
-            try await Ffmpeg.run(inputs + ["-filter_complex", filter] + maps + codecs + [out], duration: total, progress: progress)
+            try await Ffmpeg.run(cat(inputs, graph, maps, codecs, [out]), duration: total, progress: progress)
             return out
         }
     }

@@ -96,20 +96,21 @@ public enum MediaConverter {
         let bits = a.bitsPerSample > 0 ? a.bitsPerSample : (["s32", "s32p", "flt", "fltp", "dbl"].contains(a.sampleFmt) ? 24 : 16)
         let hiRes = bits > 16
         let coverOK = info.hasCover && ["mp3", "m4a", "flac"].contains(target)
-        let map = coverOK ? ["-map", "0:a:0", "-map", "0:v:0?", "-c:v", "copy", "-disposition:v:0", "attached_pic"] : ["-map", "0:a:0", "-vn"]
+        let map: [String] = coverOK ? ["-map", "0:a:0", "-map", "0:v:0?", "-c:v", "copy", "-disposition:v:0", "attached_pic"] : ["-map", "0:a:0", "-vn"]
+        let stereo: [String] = a.channels > 2 ? ["-ac", "2"] : []
         let codec: [String]
         switch target {
-        case "mp3": codec = ["-c:a", "libmp3lame", "-q:a", "2"] + (a.channels > 2 ? ["-ac", "2"] : []) + ["-id3v2_version", "3"]
+        case "mp3": codec = cat(["-c:a", "libmp3lame", "-q:a", "2"], stereo, ["-id3v2_version", "3"])
         case "m4a": codec = a.codec == "aac" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "256k"]
         case "wav": codec = ["-c:a", hiRes ? "pcm_s24le" : "pcm_s16le"]
-        case "flac": codec = ["-c:a", "flac", "-compression_level", "5"] + (hiRes ? ["-sample_fmt", "s32"] : [])
+        case "flac": codec = cat(["-c:a", "flac", "-compression_level", "5"], hiRes ? ["-sample_fmt", "s32"] : [])
         case "ogg": codec = a.codec == "vorbis" ? ["-c:a", "copy"] : ["-c:a", "libvorbis", "-q:a", "6"]
         case "opus": codec = a.codec == "opus" ? ["-c:a", "copy"] : ["-c:a", "libopus", "-b:a", "160k", "-vbr", "on"]
         case "aiff": codec = ["-c:a", hiRes ? "pcm_s24be" : "pcm_s16be"]
-        case "wma": codec = ["-c:a", "wmav2", "-b:a", "192k"] + (a.channels > 2 ? ["-ac", "2"] : [])
+        case "wma": codec = cat(["-c:a", "wmav2", "-b:a", "192k"], stereo)
         default: throw OpError("Unsupported audio format \(target)")
         }
-        return ["-i", input] + map + ["-map_metadata", "0"] + codec + [output]
+        return cat(["-i", input], map, ["-map_metadata", "0"], codec, [output])
     }
 
     static let compatible: [String: (video: [String], audio: [String])] = [
@@ -135,39 +136,42 @@ public enum MediaConverter {
         case "wmv": audioEnc = ["-c:a", "wmav2", "-b:a", "192k"]
         default: audioEnc = ["-c:a", "aac", "-b:a", "192k"]
         }
-        let audioPart = a == nil ? ["-an"] : copyAudio ? ["-c:a", "copy"] : audioEnc
-        let maps = ["-map", "0:v:0?", "-map", "0:a?"]
-        let fast = ["mp4", "mov"].contains(target) ? ["-movflags", "+faststart"] : []
-        let hvc = copyVideo && v?.codec == "hevc" && ["mp4", "mov"].contains(target) ? ["-tag:v", "hvc1"] : []
+        let audioPart: [String] = a == nil ? ["-an"] : copyAudio ? ["-c:a", "copy"] : audioEnc
+        let maps: [String] = ["-map", "0:v:0?", "-map", "0:a?"]
+        let fast: [String] = ["mp4", "mov"].contains(target) ? ["-movflags", "+faststart"] : []
+        let isHevc = v?.codec == "hevc"
+        let hvc: [String] = copyVideo && isHevc && ["mp4", "mov"].contains(target) ? ["-tag:v", "hvc1"] : []
         let d = info.duration
+        let inArgs: [String] = ["-i", input]
+        let outArgs: [String] = [output]
 
         if copyVideo {
-            try await Ffmpeg.run(["-i", input] + maps + ["-map_metadata", "0", "-c:v", "copy"] + hvc + audioPart + fast + [output], duration: d, progress: progress)
+            try await Ffmpeg.run(cat(inArgs, maps, ["-map_metadata", "0", "-c:v", "copy"], hvc, audioPart, fast, outArgs), duration: d, progress: progress)
             return
         }
-        let even = ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"]
+        let even: [String] = ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"]
         switch target {
         case "webm":
-            try await Ffmpeg.run(["-i", input] + maps + ["-map_metadata", "0", "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1",
-                                                       "-deadline", "good", "-cpu-used", "4"] + audioPart + [output], duration: d, progress: progress)
+            let vp9: [String] = ["-map_metadata", "0", "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1", "-deadline", "good", "-cpu-used", "4"]
+            try await Ffmpeg.run(cat(inArgs, maps, vp9, audioPart, outArgs), duration: d, progress: progress)
             return
         case "avi":
-            try await Ffmpeg.run(["-i", input] + maps + ["-c:v", "mpeg4", "-q:v", "3", "-vtag", "xvid"] + audioPart + [output], duration: d, progress: progress)
+            try await Ffmpeg.run(cat(inArgs, maps, ["-c:v", "mpeg4", "-q:v", "3", "-vtag", "xvid"], audioPart, outArgs), duration: d, progress: progress)
             return
         case "wmv":
-            try await Ffmpeg.run(["-i", input] + maps + ["-c:v", "wmv2", "-q:v", "3"] + audioPart + [output], duration: d, progress: progress)
+            try await Ffmpeg.run(cat(inArgs, maps, ["-c:v", "wmv2", "-q:v", "3"], audioPart, outArgs), duration: d, progress: progress)
             return
         default:
             break
         }
         // mp4 / mov / mkv: H.264, on the Mac's hardware encoder when possible.
-        let pix = ["-pix_fmt", "yuv420p"]
+        let pix: [String] = ["-pix_fmt", "yuv420p"]
         if Settings.current.hardwareVideoEncoding && videoToolboxWorks != false && Ffmpeg.hasEncoder("h264_videotoolbox") {
             let w = max(v?.width ?? 1280, 2), h = max(v?.height ?? 720, 2)
             let kbps = max(1500, Int(Double(w * h) * 30 * 0.1 / 1000))
+            let vt: [String] = ["-c:v", "h264_videotoolbox", "-b:v", "\(kbps)k"]
             do {
-                try await Ffmpeg.run(["-i", input] + maps + ["-map_metadata", "0"] + even + ["-c:v", "h264_videotoolbox", "-b:v", "\(kbps)k"] + pix
-                                     + audioPart + fast + [output], duration: d, progress: progress)
+                try await Ffmpeg.run(cat(inArgs, maps, ["-map_metadata", "0"], even, vt, pix, audioPart, fast, outArgs), duration: d, progress: progress)
                 videoToolboxWorks = true
                 return
             } catch let e as OpError where videoToolboxWorks == nil {
@@ -175,8 +179,8 @@ public enum MediaConverter {
                 videoToolboxWorks = false
             }
         }
-        try await Ffmpeg.run(["-i", input] + maps + ["-map_metadata", "0"] + even + ["-c:v", "libx264", "-preset", "medium", "-crf", "20"] + pix
-                             + audioPart + fast + [output], duration: d, progress: progress)
+        let x264: [String] = ["-c:v", "libx264", "-preset", "medium", "-crf", "20"]
+        try await Ffmpeg.run(cat(inArgs, maps, ["-map_metadata", "0"], even, x264, pix, audioPart, fast, outArgs), duration: d, progress: progress)
     }
 
     static func gif(_ input: String, _ output: String, _ info: MediaInfo, _ progress: @escaping (Double) -> Void) async throws {

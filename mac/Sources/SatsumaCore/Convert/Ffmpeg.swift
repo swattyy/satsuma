@@ -1,5 +1,8 @@
 import Foundation
 
+/// Joins argument lists; long `+` chains of array literals are slow for the type checker.
+func cat(_ parts: [String]...) -> [String] { parts.flatMap { $0 } }
+
 public struct MediaStream {
     public let type: String
     public let codec: String
