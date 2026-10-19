@@ -121,7 +121,12 @@ public enum RichText {
         catch { throw OpError("macOS can't open \(P.fileName(path)).") }
     }
 
-    public static func read(_ path: String) async throws -> NSAttributedString { try await readOnMain(path) }
+    /// NSAttributedString isn't Sendable; the reader hands it over once and never touches it again.
+    struct Handoff: @unchecked Sendable { let text: NSAttributedString }
+
+    @MainActor static func readHandoff(_ path: String) throws -> Handoff { Handoff(text: try readOnMain(path)) }
+
+    public static func read(_ path: String) async throws -> NSAttributedString { try await readHandoff(path).text }
 
     public static func write(_ text: NSAttributedString, to path: String, format: String) throws {
         let type: NSAttributedString.DocumentType

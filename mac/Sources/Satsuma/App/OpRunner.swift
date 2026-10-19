@@ -3,24 +3,34 @@ import SatsumaCore
 
 /// Runs a wheel item off the main thread and mirrors its progress into a bubble at the drop point.
 enum OpRunner {
-    final class HudBox { var hud: Hud? }
+    /// The bubble for one run. Only touched on the main thread.
+    final class HudBox: @unchecked Sendable {
+        var hud: Hud?
+        let anchor: CGPoint
+        let title: String
+        let glyph: String
 
-    static func start(_ item: WheelItem, files: [String], anchor: CGPoint) {
-        let box = HudBox()
-        let glyph = item.glyph ?? Glyphs.convert
-        let ctx = OpContext(files: files, anchor: anchor)
-        ctx.onBeginWork = { title in
-            DispatchQueue.main.async { if box.hud == nil { box.hud = Hud(anchor: anchor, title: title, glyph: glyph) } }
+        init(anchor: CGPoint, title: String, glyph: String) {
+            self.anchor = anchor
+            self.title = title
+            self.glyph = glyph
         }
-        ctx.onProgress = { f, status in DispatchQueue.main.async { box.hud?.report(f, status) } }
-        if !item.interactive { ctx.beginWork(item.workingTitle ?? "\(item.caption) \(item.label)…") }
 
-        func ensureHud() -> Hud {
-            if let h = box.hud { return h }
-            let h = Hud(anchor: anchor, title: item.label, glyph: glyph)
-            box.hud = h
+        /// The bubble, created at the drop point if the operation didn't start one (quick results, early errors).
+        func ensure(_ title: String? = nil) -> Hud {
+            if let hud { return hud }
+            let h = Hud(anchor: anchor, title: title ?? self.title, glyph: glyph)
+            hud = h
             return h
         }
+    }
+
+    static func start(_ item: WheelItem, files: [String], anchor: CGPoint) {
+        let box = HudBox(anchor: anchor, title: item.label, glyph: item.glyph ?? Glyphs.convert)
+        let ctx = OpContext(files: files, anchor: anchor)
+        ctx.onBeginWork = { title in DispatchQueue.main.async { _ = box.ensure(title) } }
+        ctx.onProgress = { f, status in DispatchQueue.main.async { box.hud?.report(f, status) } }
+        if !item.interactive { ctx.beginWork(item.workingTitle ?? "\(item.caption) \(item.label)…") }
 
         Task.detached {
             do {
@@ -32,7 +42,7 @@ enum OpRunner {
                     else if r.outputs.count == 1 { title = "Saved " + P.fileName(r.outputs[0]); subtitle = "Click to show in Finder" }
                     else if r.outputs.count > 1 { title = "Saved \(r.outputs.count) files"; subtitle = "Click to show in Finder" }
                     else { title = "Done"; subtitle = "" }
-                    ensureHud().complete(title, subtitle, outputs: r.outputs)
+                    box.ensure().complete(title, subtitle, outputs: r.outputs)
                     if Settings.current.revealAfterConvert && !r.outputs.isEmpty {
                         NSWorkspace.shared.activateFileViewerSelecting(r.outputs.map { URL(fileURLWithPath: $0) })
                     }
@@ -41,11 +51,11 @@ enum OpRunner {
                 await MainActor.run { box.hud?.dismiss() }
             } catch let e as OpError {
                 Log.warn("\(item.id) failed: \(e.message)")
-                await MainActor.run { ensureHud().fail("Couldn't finish", e.message) }
+                await MainActor.run { box.ensure().fail("Couldn't finish", e.message) }
             } catch {
                 Log.error("\(item.id) crashed", error)
                 let first = error.localizedDescription.split(whereSeparator: \.isNewline).first.map(String.init) ?? "\(error)"
-                await MainActor.run { ensureHud().fail("Something went wrong", first) }
+                await MainActor.run { box.ensure().fail("Something went wrong", first) }
             }
         }
     }

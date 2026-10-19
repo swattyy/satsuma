@@ -87,40 +87,71 @@ enum RenderTest {
         return files
     }
 
-    /// Renders the windows and tool dialogs offscreen (their async previews don't load here, only the layout).
+    /// Renders the windows and tool dialogs offscreen, in light and dark.
     @MainActor
-    static func ui(_ dir: String, _ samples: [String]) throws -> [String] {
+    static func ui(_ dir: String, _ samples: [String]) async throws -> [String] {
         try P.createDir(dir)
         let img = samples.first ?? Welcome.samplePicture()
         let video = samples.count > 1 ? samples[1] : img
         let audio = samples.count > 2 ? samples[2] : img
         let pdf = samples.count > 3 ? samples[3] : img
         var files: [String] = []
-        func shot<V: View>(_ name: String, width: CGFloat, _ view: V) throws {
+        func shot<V: View>(_ name: String, width: CGFloat, _ view: V) async throws {
             for dark in [false, true] {
-                let r = ImageRenderer(content: view.frame(width: width).padding(0)
-                    .background(Color(nsColor: dark ? NSColor(white: 0.16, alpha: 1) : NSColor(white: 0.97, alpha: 1)))
-                    .environment(\.colorScheme, dark ? .dark : .light))
-                r.scale = 2
-                guard let cg = r.cgImage else { continue }
+                guard let cg = await snapshot(view, width: width, dark: dark) else { continue }
                 let out = P.join(dir, name + (dark ? "-dark" : "") + ".png")
                 try ImageConverter.write(cg, to: out, type: "public.png")
                 files.append(out)
             }
         }
-        try shot("settings", width: 560, SettingsView(scrolls: false))
-        try shot("welcome", width: 640, WelcomeView())
-        try shot("compress", width: 460, ToolDialogs.CompressView(files: [img], done: { _ in }).padding(22))
-        try shot("resize", width: 460, ToolDialogs.ResizeView(files: [img], done: { _ in }).padding(22))
-        try shot("crop", width: 600, ToolDialogs.CropView(file: img, done: { _ in }).padding(22))
-        try shot("redact", width: 520, ToolDialogs.RedactView(files: [img], done: { _ in }).padding(22))
-        try shot("backdrop", width: 520, ToolDialogs.BackdropView(files: [img], done: { _ in }).padding(22))
-        try shot("collage", width: 540, ToolDialogs.CollageView(files: [img, img, img], done: { _ in }).padding(22))
-        try shot("video-compress", width: 460, ToolDialogs.VideoCompressView(files: [video], done: { _ in }).padding(22))
-        try shot("audio-compress", width: 460, ToolDialogs.AudioCompressView(files: [audio], done: { _ in }).padding(22))
-        try shot("trim", width: 600, ToolDialogs.TrimView(file: video, done: { _ in }).padding(22))
-        try shot("pages", width: 560, ToolDialogs.PagesView(file: pdf, done: { _ in }).padding(22))
+        try await shot("settings", width: 560, SettingsView(scrolls: false))
+        try await shot("welcome", width: 640, WelcomeView())
+        try await shot("compress", width: 460, ToolDialogs.CompressView(files: [img], done: { _ in }).padding(22))
+        try await shot("resize", width: 460, ToolDialogs.ResizeView(files: [img], done: { _ in }).padding(22))
+        try await shot("crop", width: 600, ToolDialogs.CropView(file: img, done: { _ in }).padding(22))
+        try await shot("redact", width: 520, ToolDialogs.RedactView(files: [img], done: { _ in }).padding(22))
+        try await shot("backdrop", width: 520, ToolDialogs.BackdropView(files: [img], done: { _ in }).padding(22))
+        try await shot("collage", width: 540, ToolDialogs.CollageView(files: [img, img, img], done: { _ in }).padding(22))
+        try await shot("video-compress", width: 460, ToolDialogs.VideoCompressView(files: [video], done: { _ in }).padding(22))
+        try await shot("audio-compress", width: 460, ToolDialogs.AudioCompressView(files: [audio], done: { _ in }).padding(22))
+        try await shot("trim", width: 600, ToolDialogs.TrimView(file: video, done: { _ in }).padding(22))
+        try await shot("pages", width: 560, ToolDialogs.PagesView(file: pdf, done: { _ in }).padding(22))
         return files
+    }
+
+    /// A window that is never shown but draws its controls in the active (key window) style.
+    private final class OffscreenWindow: NSWindow {
+        override var isKeyWindow: Bool { true }
+        override var isMainWindow: Bool { true }
+    }
+
+    /// Hosts a SwiftUI view in an offscreen window, gives it a moment to lay out and load its previews, then draws it
+    /// with cacheDisplay. ImageRenderer can't be used here: it leaves placeholders for AppKit-backed controls.
+    @MainActor
+    static func snapshot<V: View>(_ view: V, width: CGFloat, dark: Bool, px: CGFloat = 2) async -> CGImage? {
+        let host = NSHostingView(rootView: view.frame(width: width).background(Color(nsColor: .windowBackgroundColor)))
+        let window = OffscreenWindow(contentRect: NSRect(x: -30000, y: -30000, width: width, height: 400),
+                                     styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        window.contentView = host
+        defer {
+            window.contentView = nil
+            window.close()
+        }
+        for _ in 0..<2 {
+            window.setContentSize(NSSize(width: width, height: max(host.fittingSize.height, 1)))
+            host.layoutSubtreeIfNeeded()
+            try? await Task.sleep(nanoseconds: 400_000_000)
+        }
+        let size = host.bounds.size
+        guard size.width > 0, size.height > 0,
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * px), pixelsHigh: Int(size.height * px),
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = size
+        host.cacheDisplay(in: host.bounds, to: rep)
+        return rep.cgImage
     }
 
     /// One wheel frame at animation time `t` (0...1), like the Windows RenderPreview.

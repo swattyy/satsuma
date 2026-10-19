@@ -129,12 +129,12 @@ public enum Ffmpeg {
         let exe = try require()
         let full = ["-hide_banner", "-nostdin", "-y", "-loglevel", "error", "-progress", "pipe:1", "-nostats"] + args
         Log.info("ffmpeg " + full.joined(separator: " "))
-        let r = try await Proc.run(exe, full) { line in
+        let r = try await Proc.run(exe, full, onLine: { line in
             guard let progress, duration > 0 else { return }
             for key in ["out_time_us=", "out_time_ms="] where line.hasPrefix(key) {
                 if let us = Double(line.dropFirst(key.count)) { progress(min(max(us / 1_000_000 / duration, 0), 1)) }
             }
-        }
+        })
         if r.code != 0 {
             Log.warn("ffmpeg failed: \(r.stderr)")
             throw OpError("FFmpeg: " + r.lastError)

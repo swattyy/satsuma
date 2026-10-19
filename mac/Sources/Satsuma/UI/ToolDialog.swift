@@ -6,48 +6,41 @@ import SatsumaCore
 /// Each dialog calls `finish(value)` to run the tool, or `finish(nil)` (or closes the window) to cancel.
 @MainActor
 enum ToolDialog {
-    /// Keeps the window and its delegate alive while the dialog is up. Only used on the main thread.
+    /// Keeps the window and its delegate alive while the dialog is up, and answers the caller exactly once.
+    @MainActor
     final class Session: NSObject, NSWindowDelegate {
         static var live: [Session] = []
         var window: NSWindow?
-        var onClose: (() -> Void)?
-        func close() {
+        var answer: ((Any?) -> Void)?
+
+        func end(_ value: Any?) {
+            guard let answer else { return }
+            self.answer = nil
             window?.delegate = nil
             window?.close()
             window = nil
             Session.live.removeAll { $0 === self }
+            answer(value)
         }
-        func windowWillClose(_ notification: Notification) {
-            let c = onClose
-            onClose = nil
-            Session.live.removeAll { $0 === self }
-            c?()
-        }
+
+        func windowWillClose(_ notification: Notification) { end(nil) }
     }
 
     static func present<T, V: View>(_ title: String, width: CGFloat = 460, _ content: (@escaping (T?) -> Void) -> V) async -> T? {
-        await withCheckedContinuation { (c: CheckedContinuation<T?, Never>) in
-            let session = Session()
-            var resumed = false
-            func finish(_ value: T?) {
-                if resumed { return }
-                resumed = true
-                session.onClose = nil
-                session.close()
-                c.resume(returning: value)
-            }
-            session.onClose = { finish(nil) }
-            let root = content { value in finish(value) }
-            let host = NSHostingController(rootView: root.padding(22).frame(width: width))
-            let w = NSWindow(contentViewController: host)
-            w.title = title
-            w.styleMask = [.titled, .closable]
-            w.isReleasedWhenClosed = false
-            w.level = .floating
-            w.center()
-            session.window = w
-            w.delegate = session
-            Session.live.append(session)
+        let session = Session()
+        let root = content { [weak session] value in session?.end(value) }
+        let host = NSHostingController(rootView: root.padding(22).frame(width: width))
+        let w = NSWindow(contentViewController: host)
+        w.title = title
+        w.styleMask = [.titled, .closable]
+        w.isReleasedWhenClosed = false
+        w.level = .floating
+        w.center()
+        session.window = w
+        w.delegate = session
+        Session.live.append(session)
+        return await withCheckedContinuation { (c: CheckedContinuation<T?, Never>) in
+            session.answer = { value in c.resume(returning: value as? T) }
             NSApp.activate(ignoringOtherApps: true)
             w.makeKeyAndOrderFront(nil)
         }

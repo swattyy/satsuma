@@ -7,6 +7,21 @@ extension Catalog {
                   workingTitle: working ?? label + "…", interactive: interactive, run: run)
     }
 
+    /// Total size and file count of everything under the folders (synchronous: directory enumerators can't be used from async code).
+    static func measure(_ dirs: [String]) -> (Int64, Int) {
+        var bytes: Int64 = 0
+        var count = 0
+        for dir in dirs {
+            guard let e = FileManager.default.enumerator(at: P.url(dir), includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]) else { continue }
+            for case let url as URL in e {
+                guard let v = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), v.isRegularFile == true else { continue }
+                bytes += Int64(v.fileSize ?? 0)
+                count += 1
+            }
+        }
+        return (bytes, count)
+    }
+
     static func toolItems(_ files: [String]) -> [WheelItem] {
         let groups = distinct(files.map(groupOf))
         let many = files.count > 1
@@ -171,16 +186,7 @@ extension Catalog {
                 .files([try await ArchiveConverter.create(ctx.files, format: "zip") { p in ctx.report(p) }])
             })
             list.append(tool("info", "Size", Glyphs.info, "Folder size", working: "Measuring…") { ctx in
-                var bytes: Int64 = 0
-                var count = 0
-                for dir in ctx.files {
-                    guard let e = FileManager.default.enumerator(at: P.url(dir), includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey]) else { continue }
-                    for case let url as URL in e {
-                        guard let v = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]), v.isRegularFile == true else { continue }
-                        bytes += Int64(v.fileSize ?? 0)
-                        count += 1
-                    }
-                }
+                let (bytes, count) = measure(ctx.files)
                 return .done(FileKinds.humanSize(bytes), "\(TextUtil.n0(count)) files")
             })
 

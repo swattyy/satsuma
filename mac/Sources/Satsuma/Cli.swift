@@ -89,7 +89,7 @@ enum Cli {
             case "--render-ui":
                 guard let dir = rest.first else { throw OpError("Usage: --render-ui <dir> [image] [video] [audio] [pdf]") }
                 let samples = rest.dropFirst().map(P.full)
-                result["files"] = try await MainActor.run { try RenderTest.ui(P.full(dir), samples) }
+                result["files"] = try await RenderTest.ui(P.full(dir), samples)
                 result["ok"] = true
             default:
                 break

@@ -10,7 +10,8 @@ enum SettingsWindow {
 }
 
 /// Settings mirror the Windows app's sections: wheel keys, saving, quality, look and feel, engines.
-final class SettingsModel: ObservableObject {
+/// Only used on the main thread (SwiftUI and main-queue callbacks).
+final class SettingsModel: ObservableObject, @unchecked Sendable {
     @Published var s = Settings.current
     @Published var trusted = DragMonitor.isTrusted
     @Published var ffmpeg = Ffmpeg.path
@@ -67,9 +68,9 @@ final class SettingsModel: ObservableObject {
         installStatus = "Running brew install ffmpeg…"
         Task {
             let env = ["PATH": "\(P.dir(brew)):/usr/bin:/bin:/usr/sbin:/sbin", "HOMEBREW_NO_ENV_HINTS": "1"]
-            let r = try? await Proc.run(brew, ["install", "ffmpeg"], env: env, lowPriority: false) { line in
+            let r = try? await Proc.run(brew, ["install", "ffmpeg"], env: env, lowPriority: false, onLine: { line in
                 DispatchQueue.main.async { if !line.isEmpty { self.installStatus = String(line.prefix(90)) } }
-            }
+            })
             await MainActor.run {
                 Ffmpeg.reset()
                 ffmpeg = Ffmpeg.path

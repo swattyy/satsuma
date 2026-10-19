@@ -174,7 +174,7 @@ public enum WebRender {
         defer { page.close() }
         try await page.load(html: html, baseURL: nil)
         _ = try? await page.webView.callAsyncJavaScript("const i = document.images[0]; if (i && i.decode) { await i.decode(); } return 1;",
-                                                        arguments: [:], in: nil, in: .page)
+                                                        arguments: [:], in: nil, contentWorld: .page)
         let config = WKSnapshotConfiguration()
         config.rect = CGRect(x: 0, y: 0, width: width, height: height)
         config.snapshotWidth = NSNumber(value: width)

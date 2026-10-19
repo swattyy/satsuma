@@ -60,7 +60,7 @@ final class WheelController {
             layers = l
             ticker = FrameTicker(view: v) { [weak self] dt in self?.tick(dt) ?? false }
         }
-        guard let panel, let view, let layers else { return }
+        guard let panel, let view, layers != nil else { return }
         panel.setFrame(NSRect(origin: origin, size: CGSize(width: L.width, height: L.height)), display: false)
         view.frame = NSRect(x: 0, y: 0, width: L.width, height: L.height)
 
