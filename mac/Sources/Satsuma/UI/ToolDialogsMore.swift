@@ -219,6 +219,9 @@ extension ToolDialogs {
             let gen = AVAssetImageGenerator(asset: AVURLAsset(url: URL(fileURLWithPath: file)))
             gen.appliesPreferredTrackTransform = true
             gen.maximumSize = CGSize(width: 480, height: 480)
+            // The default tolerance returns the nearest keyframe, which for short clips is often the first frame.
+            gen.requestedTimeToleranceBefore = .zero
+            gen.requestedTimeToleranceAfter = .zero
             startFrame = try? gen.copyCGImage(at: CMTime(seconds: start, preferredTimescale: 600), actualTime: nil)
             endFrame = try? gen.copyCGImage(at: CMTime(seconds: max(0, end - 0.05), preferredTimescale: 600), actualTime: nil)
         }
@@ -227,48 +230,79 @@ extension ToolDialogs {
     // ------------------------------------------------------------------ pages
 
     static func pages(_ file: String) async -> [Int]? {
-        await ToolDialog.present("Pages", width: 560) { done in PagesView(file: file, done: done) }
+        await ToolDialog.present("Extract pages", width: 640) { done in PagesView(file: file, done: done) }
     }
 
+    /// Pick pages by clicking thumbnails or typing ranges like "1-3, 7". Every page starts out selected.
     struct PagesView: View {
         let file: String
         let done: ([Int]?) -> Void
-        @State private var thumbs: [NSImage] = []
+        @State private var count = 0
+        @State private var thumbs: [Int: NSImage] = [:]
         @State private var selected = Set<Int>()
         @State private var text = ""
+        @State private var failed = false
 
         var body: some View {
-            DialogFrame(title: "Pick pages", subtitle: "\(P.fileName(file)) · \(thumbs.count) pages", primary: "Save Pages", primaryEnabled: !selected.isEmpty,
+            DialogFrame(title: "Extract pages", subtitle: failed ? "Couldn't read this PDF." : count > 0 ? "\(P.fileName(file)) · \(count) pages" : P.fileName(file),
+                        primary: "Extract", primaryEnabled: !selected.isEmpty,
                         onCancel: { done(nil) }, onPrimary: { done(selected.sorted()) }) {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 92), spacing: 10)], spacing: 10) {
-                        ForEach(thumbs.indices, id: \.self) { i in
-                            VStack(spacing: 3) {
-                                Image(nsImage: thumbs[i]).resizable().aspectRatio(contentMode: .fit).frame(height: 110)
-                                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(selected.contains(i + 1) ? Color.tangerine : Color.gray.opacity(0.3),
-                                                                                     lineWidth: selected.contains(i + 1) ? 3 : 1))
-                                Text("\(i + 1)").font(.caption)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 10)], spacing: 10) {
+                        ForEach(0..<count, id: \.self) { i in
+                            VStack(spacing: 4) {
+                                ZStack {
+                                    if let t = thumbs[i] {
+                                        Image(nsImage: t).resizable().aspectRatio(contentMode: .fit)
+                                    } else {
+                                        Rectangle().fill(Color.gray.opacity(0.12))
+                                    }
+                                }
+                                .frame(height: 134)
+                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(selected.contains(i + 1) ? Color.tangerine : Color.gray.opacity(0.3),
+                                                                                 lineWidth: selected.contains(i + 1) ? 3 : 1))
+                                Text(verbatim: "\(i + 1)").font(.caption)
                             }
+                            .contentShape(Rectangle())
                             .onTapGesture {
                                 if selected.contains(i + 1) { selected.remove(i + 1) } else { selected.insert(i + 1) }
                                 text = PageRanges.format(selected.sorted())
                             }
                         }
                     }
+                    .padding(4)
                 }
-                .frame(height: 300)
-                HStack {
-                    Text("Pages")
-                    TextField("e.g. 1-3, 7", text: $text, onCommit: { selected = Set(PageRanges.parse(text, max: thumbs.count)) })
+                .frame(height: 330)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Pages to keep")
+                    TextField("e.g. 1-3, 7", text: $text)
+                }
+                HStack(spacing: 6) {
+                    pick("All") { _ in true }
+                    pick("None") { _ in false }
+                    pick("Odd") { $0 % 2 == 1 }
+                    pick("Even") { $0 % 2 == 0 }
                 }
             }
             .task {
-                guard let doc = PDFDocument(url: URL(fileURLWithPath: file)) else { return }
-                var list: [NSImage] = []
-                for i in 0..<doc.pageCount { if let p = doc.page(at: i) { list.append(p.thumbnail(of: NSSize(width: 180, height: 240), for: .cropBox)) } }
-                thumbs = list
+                guard let doc = PDFDocument(url: URL(fileURLWithPath: file)), doc.pageCount > 0 else { failed = true; return }
+                count = doc.pageCount
+                selected = Set(1...count)
+                text = PageRanges.format(selected.sorted())
+                // Like Windows, only the first 120 pages get thumbnails; drawing them in small batches keeps the dialog responsive.
+                for i in 0..<min(count, 120) {
+                    if let p = doc.page(at: i) { thumbs[i] = p.thumbnail(of: NSSize(width: 208, height: 268), for: .cropBox) }
+                    if i % 6 == 5 { await Task.yield() }
+                }
             }
-            .onChange(of: text) { t in selected = Set(PageRanges.parse(t, max: thumbs.count)) }
+            .onChange(of: text) { t in selected = Set(PageRanges.parse(t, max: count)) }
+        }
+
+        private func pick(_ label: String, _ keep: @escaping (Int) -> Bool) -> some View {
+            Button(label) {
+                selected = Set((0..<count).map { $0 + 1 }.filter(keep))
+                text = PageRanges.format(selected.sorted())
+            }
         }
     }
 }

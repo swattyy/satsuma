@@ -115,7 +115,7 @@ enum RenderTest {
         try await shot("video-compress", width: 460, ToolDialogs.VideoCompressView(files: [video], done: { _ in }).padding(22))
         try await shot("audio-compress", width: 460, ToolDialogs.AudioCompressView(files: [audio], done: { _ in }).padding(22))
         try await shot("trim", width: 600, ToolDialogs.TrimView(file: video, done: { _ in }).padding(22))
-        try await shot("pages", width: 560, ToolDialogs.PagesView(file: pdf, done: { _ in }).padding(22))
+        try await shot("pages", width: 640, ToolDialogs.PagesView(file: pdf, done: { _ in }).padding(22))
         return files
     }
 

@@ -106,7 +106,8 @@ struct LabeledSlider: View {
                 Spacer()
                 Text(format(value)).bold().monospacedDigit()
             }
-            Slider(value: $value, in: range, step: step)
+            // Snapped in the binding: with `step:` the macOS slider draws a tick mark for every value.
+            Slider(value: Binding(get: { value }, set: { value = (($0 - range.lowerBound) / step).rounded() * step + range.lowerBound }), in: range)
         }
     }
 }

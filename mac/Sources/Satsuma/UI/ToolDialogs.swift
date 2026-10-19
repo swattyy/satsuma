@@ -180,10 +180,12 @@ enum ToolDialogs {
         @State private var faceRects: [CGRect] = []
         @State private var textRects: [CGRect] = []
         @State private var status = "Looking for faces and text…"
+        @State private var found: String?
+        @State private var nothingFound = false
 
         var body: some View {
             DialogFrame(title: "Redact", subtitle: DialogText.describe(files) + " · detection runs on this Mac", primary: "Redact",
-                        primaryEnabled: faces || text, onCancel: { done(nil) },
+                        primaryEnabled: (faces || text) && (!nothingFound || files.count > 1), onCancel: { done(nil) },
                         onPrimary: { done(RedactChoice(faces: faces, text: text, style: RedactStyle(rawValue: style) ?? .blur)) }) {
                 Preview(image: preview ?? source, height: 260)
                 Text(status).font(.callout).foregroundColor(.secondary)
@@ -204,12 +206,13 @@ enum ToolDialogs {
             faceRects = (try? ImageTools.detectFaces(img)) ?? []
             textRects = (try? ImageTools.detectText(img)) ?? []
             if faceRects.isEmpty && !textRects.isEmpty { faces = false; text = true }
-            render()
             if faceRects.isEmpty && textRects.isEmpty {
+                nothingFound = true
                 status = files.count == 1 ? "No faces or text found in this image." : "No faces or text in the first image; the others are checked when you click Redact."
             } else {
-                status = "Found \(faceRects.count) face\(faceRects.count == 1 ? "" : "s") and \(textRects.count) line\(textRects.count == 1 ? "" : "s") of text."
+                found = "Found \(faceRects.count) face\(faceRects.count == 1 ? "" : "s") and \(textRects.count) line\(textRects.count == 1 ? "" : "s") of text."
             }
+            render()
         }
 
         func render() {
@@ -218,6 +221,10 @@ enum ToolDialogs {
             if faces { regions += faceRects.map { (rect: $0, oval: true) } }
             if text { regions += textRects.map { (rect: $0, oval: false) } }
             preview = ImageTools.applyRedactions(source, regions, style: RedactStyle(rawValue: style) ?? .blur)
+            guard let found else { return }
+            let n = regions.count
+            status = found + " " + (n == 0 ? "Nothing selected to redact."
+                : "\(n) area\(n == 1 ? "" : "s") will be covered" + (files.count > 1 ? " in the first image (others are detected when you click Redact)." : "."))
         }
     }
 
@@ -324,7 +331,7 @@ enum ToolDialogs {
                 Text(hints[preset]).font(.callout).foregroundColor(.secondary)
                 Text("OPTIONS").font(.caption).bold().foregroundColor(.secondary)
                 Picker("Resolution at most", selection: $resolution) {
-                    ForEach(heights.indices, id: \.self) { i in Text(i == 0 ? "Keep resolution" : i == 1 ? "4K (2160p)" : "\(heights[i])p").tag(i) }
+                    ForEach(heights.indices, id: \.self) { i in Text(verbatim: i == 0 ? "Keep resolution" : i == 1 ? "4K (2160p)" : "\(heights[i])p").tag(i) }
                 }
                 Picker("Audio", selection: $audio) { ForEach(audios.indices, id: \.self) { Text("\(audios[$0]) kbps").tag($0) } }
                 if preset == 3 {

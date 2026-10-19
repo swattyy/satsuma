@@ -81,10 +81,11 @@ struct WelcomeView: View {
                     keyLine(Settings.current.toolsKey, "Tools")
                     keyLine(Settings.current.actionsKey, "Actions")
                 }
-                .padding(12).frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+                .padding(12).frame(maxWidth: .infinity, minHeight: 120, maxHeight: .infinity, alignment: .topLeading)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)))
                 card("3", "Drop on it", "Release over a format or tool. The new file appears next to the original.")
             }
+            .fixedSize(horizontal: false, vertical: true) // the cards share the tallest one's height
             if !m.trusted {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "hand.raised.fill").foregroundColor(.orange).font(.title2)
@@ -95,6 +96,7 @@ struct WelcomeView: View {
                         Button("Open Accessibility Settings") { DragMonitor.requestTrust(); DragMonitor.openAccessibilitySettings() }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.6)))
             }
@@ -108,6 +110,7 @@ struct WelcomeView: View {
                         .font(.callout).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
             .background(RoundedRectangle(cornerRadius: 12).stroke(Color.tangerine, lineWidth: 1.5))
             Spacer(minLength: 0)
@@ -127,7 +130,7 @@ struct WelcomeView: View {
             Text(title).bold()
             Text(text).font(.callout).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12).frame(maxWidth: .infinity, minHeight: 120, alignment: .topLeading)
+        .padding(12).frame(maxWidth: .infinity, minHeight: 120, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)))
     }
 

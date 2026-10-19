@@ -137,7 +137,7 @@ struct SettingsView: View {
                         Spacer()
                         Text("\(m.s.imageQuality)").bold().frame(width: 36, alignment: .trailing)
                     }
-                    Slider(value: Binding(get: { Double(m.s.imageQuality) }, set: { m.s.imageQuality = Int($0.rounded()); m.save() }), in: 40...100, step: 1)
+                    Slider(value: Binding(get: { Double(m.s.imageQuality) }, set: { m.s.imageQuality = Int($0.rounded()); m.save() }), in: 40...100)
                     Toggle("Keep photo metadata (date, camera, location) when converting", isOn: Binding(get: { m.s.keepMetadata }, set: { m.s.keepMetadata = $0; m.save() }))
                     Toggle("Use the hardware video encoder (VideoToolbox) with FFmpeg", isOn: Binding(get: { m.s.hardwareVideoEncoding }, set: { m.s.hardwareVideoEncoding = $0; m.save() }))
                     Picker("PDF page images", selection: Binding(get: { m.s.pdfRenderDpi }, set: { m.s.pdfRenderDpi = $0; m.save() })) {
