@@ -13,6 +13,8 @@ final class WheelLayers {
     var tintScale: Double
 
     private let shadow = CALayer(), plate = CALayer(), hubDisc = CALayer()
+    /// The plate's shadow. The live wheel hosts it below the vibrancy view so it can't darken the glass.
+    var shadowLayer: CALayer { shadow }
     private let hubFrom = CALayer(), hubTo = CALayer()
     private let segmentsHost = CALayer()
     let hintPill = CALayer()

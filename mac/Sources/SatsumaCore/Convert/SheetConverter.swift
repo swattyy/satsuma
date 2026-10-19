@@ -3,6 +3,7 @@ import Foundation
 public struct Sheet {
     public var name: String
     public var rows: [[String]]
+    public init(name: String, rows: [[String]]) { self.name = name; self.rows = rows }
 }
 
 /// Spreadsheets: XLSX, ODS, CSV and TSV are read and written here (ported from the Windows app);

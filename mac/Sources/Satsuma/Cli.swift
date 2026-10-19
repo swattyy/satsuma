@@ -11,7 +11,7 @@ import SatsumaCore
 ///   --render-test <dir>             render wheel frames and bubbles to PNG
 /// Add --result out.json to any of them to get the result as JSON.
 enum Cli {
-    static let verbs: Set<String> = ["--convert", "--tool", "--list", "--selftest", "--make-samples", "--render-test", "--render-ui"]
+    static let verbs: Set<String> = ["--convert", "--tool", "--list", "--selftest", "--make-samples", "--render-test", "--render-ui", "--make-icon"]
 
     static func handles(_ args: [String]) -> Bool { args.first.map(verbs.contains) ?? false }
 
@@ -67,6 +67,10 @@ enum Cli {
             case "--make-samples":
                 guard let dir = rest.first else { throw OpError("Usage: --make-samples <dir>") }
                 result["files"] = try await Samples.make(in: P.full(dir))
+                result["ok"] = true
+            case "--make-icon":
+                guard let dir = rest.first else { throw OpError("Usage: --make-icon <dir.iconset>") }
+                result["files"] = try await MainActor.run { try AppIcon.writeIconset(P.full(dir)) }
                 result["ok"] = true
             case "--render-test", "--render-ui":
                 guard let dir = rest.first else { throw OpError("Usage: \(args[0]) <dir>") }

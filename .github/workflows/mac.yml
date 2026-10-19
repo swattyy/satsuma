@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 50
     defaults:
       run:
         shell: bash
@@ -36,6 +36,13 @@ jobs:
           chmod +x scripts/ci-checks.sh
           scripts/ci-checks.sh 2>&1 | tee checks.log
 
+      - name: App bundle and disk image
+        id: app
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          chmod +x scripts/build-app.sh
+          scripts/build-app.sh 2>&1 | tee app.log
+
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
@@ -45,6 +52,15 @@ jobs:
             mac/build.log
             mac/test.log
             mac/checks.log
+            mac/app.log
             mac/ci-out/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Upload disk image
+        if: always() && steps.app.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Satsuma-mac
+          path: mac/build/*.dmg
+          retention-days: 14
