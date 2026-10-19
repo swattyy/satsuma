@@ -21,7 +21,7 @@ namespace Satsuma;
 /// </summary>
 public static class Cli
 {
-    static readonly string[] Verbs = { "--convert", "--tool", "--list", "--render-test", "--make-icon", "--demo-wheel", "--selftest", "--render-ui" };
+    static readonly string[] Verbs = { "--convert", "--tool", "--list", "--render-test", "--make-icon", "--demo-wheel", "--selftest", "--render-ui", "--make-installer-art" };
 
     public static bool Handles(string[] args) => args.Length > 0 && Verbs.Contains(args[0]);
 
@@ -45,6 +45,10 @@ public static class Cli
             {
                 case "--make-icon":
                     AppIcon.WriteIco(rest[0]);
+                    result["ok"] = true;
+                    break;
+                case "--make-installer-art":
+                    await InstallerArt(rest[0]);
                     result["ok"] = true;
                     break;
                 case "--render-test":
@@ -249,6 +253,59 @@ public static class Cli
             using var img = SKImage.FromBitmap(b);
             using var png = img.Encode(SKEncodedImageFormat.Png, 100);
             File.WriteAllBytes(Path.Combine(dir, $"icon-{size}{(tray ? "-tray" : "")}.png"), png.ToArray());
+        }
+    }
+
+    /// <summary>Wizard images for the Inno Setup installer (BMP, several DPI sizes).</summary>
+    static async Task InstallerArt(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        // Side image on the welcome/finish pages: 164x314 at 100%.
+        foreach (var scale in new[] { 1.0f, 1.5f, 2.0f, 2.5f })
+        {
+            int w = (int)Math.Round(164 * scale), h = (int)Math.Round(314 * scale);
+            using var bmp = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul));
+            using (var c = new SKCanvas(bmp))
+            {
+                using var p = new SKPaint { IsAntialias = true };
+                p.Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(w * 0.4f, h),
+                    new[] { new SKColor(0xFF, 0xA8, 0x4C), new SKColor(0xFF, 0x5A, 0x14) }, SKShaderTileMode.Clamp);
+                c.DrawRect(0, 0, w, h, p);
+                p.Shader = null;
+                p.Color = SKColors.White.WithAlpha(22);
+                c.DrawCircle(w * 0.15f, h * 0.88f, 70 * scale, p);
+                c.DrawCircle(w * 0.95f, h * 0.12f, 52 * scale, p);
+                int icon = (int)(84 * scale);
+                using var mark = AppIcon.Render(icon, tray: false);
+                float ix = (w - icon) / 2f, iy = h * 0.30f - icon / 2f;
+                p.Color = new SKColor(0, 0, 0, 70);
+                p.MaskFilter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, 6 * scale);
+                c.DrawRoundRect(new SKRect(ix + 4 * scale, iy + 8 * scale, ix + icon - 4 * scale, iy + icon + 2 * scale), 18 * scale, 18 * scale, p);
+                p.MaskFilter = null;
+                c.DrawBitmap(mark, ix, iy);
+                using var title = new SKFont(WheelRenderer.Type.Bold, 24 * scale) { Subpixel = true, Edging = SKFontEdging.Antialias };
+                using var sub = new SKFont(WheelRenderer.Type.Semibold, 12 * scale) { Subpixel = true, Edging = SKFontEdging.Antialias };
+                p.Color = SKColors.White;
+                c.DrawText("Satsuma", w / 2f, iy + icon + 38 * scale, SKTextAlign.Center, title, p);
+                p.Color = SKColors.White.WithAlpha(220);
+                c.DrawText("Drag. Tap. Drop.", w / 2f, iy + icon + 60 * scale, SKTextAlign.Center, sub, p);
+            }
+            await Ops.Convert.ImageConverter.WriteWicAsync(bmp, Path.Combine(dir, $"wizard-{(int)(scale * 100)}.bmp"),
+                Windows.Graphics.Imaging.BitmapEncoder.BmpEncoderId, null, opaque: true, null);
+        }
+        // Small header image: 55x55 at 100%, on white.
+        foreach (var scale in new[] { 1.0f, 1.5f, 2.0f, 2.5f })
+        {
+            int s = (int)Math.Round(55 * scale);
+            using var bmp = new SKBitmap(new SKImageInfo(s, s, SKColorType.Bgra8888, SKAlphaType.Premul));
+            using (var c = new SKCanvas(bmp))
+            {
+                c.Clear(SKColors.White);
+                using var mark = AppIcon.Render(s, tray: false);
+                c.DrawBitmap(mark, 0, 0);
+            }
+            await Ops.Convert.ImageConverter.WriteWicAsync(bmp, Path.Combine(dir, $"small-{(int)(scale * 100)}.bmp"),
+                Windows.Graphics.Imaging.BitmapEncoder.BmpEncoderId, null, opaque: true, null);
         }
     }
 

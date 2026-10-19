@@ -13,9 +13,11 @@ Inspired by [Tangerine](https://tangerineformac.com/) on macOS. This is a separa
 
 ## Download
 
-Get the zip from the [releases page](https://github.com/swattyy/satsuma/releases), unzip it somewhere, and run `Satsuma.exe`. It's self-contained, so there's nothing else to install.
+Grab `Satsuma-Setup-1.0.0.exe` from the [releases page](https://github.com/swattyy/satsuma/releases) and run it. It installs for your account (no admin needed), adds Satsuma to the Start menu and opens it. Uninstall it from Settings > Apps like any other app.
 
-Windows will probably warn you the first time because the app isn't signed. Click "More info" and then "Run anyway".
+Windows will probably warn you the first time because the installer isn't signed. Click "More info" and then "Run anyway".
+
+There's also a zip on the same page if you'd rather not install anything: unzip it and run `Satsuma.exe`.
 
 Audio and video conversion also needs FFmpeg. There's an install button under Settings > Engines (it runs `winget install Gyan.FFmpeg.Essentials`).
 
@@ -72,7 +74,9 @@ You need the .NET 10 SDK.
 dotnet publish src/Satsuma -c Release -r win-x64 --self-contained true -o dist/Satsuma
 ```
 
-`Install.ps1` copies a build to `%LOCALAPPDATA%\Programs\Satsuma`, adds a Start menu shortcut and starts it. `Install.ps1 -Uninstall` removes it.
+To build the installer, install [Inno Setup 6](https://jrsoftware.org/isinfo.php) and compile `installer/Satsuma.iss` after publishing. It writes `Satsuma-Setup-<version>.exe` to `dist/release`. The wizard images in `installer/art` come from `Satsuma.exe --make-installer-art installer/art`.
+
+For a quick local install without the installer, `Install.ps1` copies a build to `%LOCALAPPDATA%\Programs\Satsuma` and adds a Start menu shortcut. `Install.ps1 -Uninstall` removes it.
 
 ## How it works
 
