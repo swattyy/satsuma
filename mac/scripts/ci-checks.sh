@@ -21,22 +21,45 @@ run() {
     fi
 }
 
+# Checks that must fail with a known message (features that need FFmpeg, inputs a tool can't use).
+expect() {
+    local name="$1" message="$2"; shift 2
+    "$BIN" "$@" --result "$OUT/results/$name.json" > "$OUT/results/$name.log" 2>&1
+    if grep -q "$message" "$OUT/results/$name.json" 2>/dev/null; then
+        echo "ok    $name (expected: $message)"
+    else
+        echo "FAIL  $name (expected \"$message\")"
+        fails=$((fails + 1))
+        tail -n 4 "$OUT/results/$name.log" | sed 's/^/        /'
+    fi
+}
+
 run samples --make-samples "$OUT/samples"
 S="$OUT/samples"
 run selftest --selftest "$S/photo.jpg" "$S/doc.pdf"
 run list-photo --list "$S/photo.jpg"
 
 # Images
-for t in png heic tiff bmp ico pdf webp avif; do run "photo-$t" --convert "$t" "$S/photo.jpg"; done
-for t in jpg webp pdf; do run "logo-$t" --convert "$t" "$S/logo.png"; done
+for t in png heic tiff bmp ico pdf; do run "photo-$t" --convert "$t" "$S/photo.jpg"; done
+if [ -z "$(command -v ffmpeg)" ]; then
+    expect photo-webp "needs FFmpeg" --convert webp "$S/photo.jpg"
+    expect photo-avif "needs FFmpeg" --convert avif "$S/photo.jpg"
+    expect gif-webm "needs FFmpeg" --convert webm "$S/anim.gif"
+    expect mov-mkv "FFmpeg isn't installed" --convert mkv "$S/clip.mov"
+    expect wav-mp3 "FFmpeg isn't installed" --convert mp3 "$S/tone.wav"
+    expect loudness "Loudness needs FFmpeg" --tool normalize "$S/tone.wav"
+fi
+for t in jpg pdf; do run "logo-$t" --convert "$t" "$S/logo.png"; done
 for t in mp4 png pdf; do run "gif-$t" --convert "$t" "$S/anim.gif"; done
-for t in rotate metadata ocr compress resize redact background; do run "tool-$t" --tool "$t" "$S/photo.jpg"; done
+for t in rotate metadata ocr compress resize background; do run "tool-$t" --tool "$t" "$S/photo.jpg"; done
+expect tool-redact "No faces found" --tool redact "$S/photo.jpg"
 run tool-makepdf --tool makepdf "$S/photo.jpg" "$S/logo.png"
 run tool-collage --tool collage "$S/photo.jpg" "$S/logo.png" "$S/photo.jpg"
 
 # PDF
 for t in png jpg txt md html epub docx; do run "pdf-$t" --convert "$t" "$S/doc.pdf"; done
-for t in split extract images compress copytext count; do run "pdftool-$t" --tool "$t" "$S/doc.pdf"; done
+for t in split extract images copytext count; do run "pdftool-$t" --tool "$t" "$S/doc.pdf"; done
+expect pdftool-compress "already compact" --tool compress "$S/doc.pdf"
 
 # Documents, sheets, subtitles
 for t in html docx pdf txt epub rtf; do run "md-$t" --convert "$t" "$S/notes.md"; done
@@ -52,7 +75,9 @@ for t in vtt txt; do run "srt-$t" --convert "$t" "$S/subs.srt"; done
 
 # Audio and video (native paths; FFmpeg ones report that FFmpeg is missing)
 for t in mp4 gif; do run "mov-$t" --convert "$t" "$S/clip.mov"; done
-for t in m4a wav aiff flac; do run "wav-$t" --convert "$t" "$S/tone.wav"; done
+for t in m4a aiff flac; do run "wav-$t" --convert "$t" "$S/tone.wav"; done
+run m4a-wav --convert wav "$S/tone.m4a"
+run flac-wav --convert wav "$S/tone.flac"
 for t in mute 720p rotate snapshot compress; do run "videotool-$t" --tool "$t" "$S/clip.mov"; done
 for t in mono fade compress; do run "audiotool-$t" --tool "$t" "$S/tone.wav"; done
 run video-merge --tool merge "$S/clip.mov" "$S/clip.mov"
@@ -64,6 +89,7 @@ run zip-to-7z --convert 7z "$S/Project.zip"
 run folder-size --tool info "$S/Project"
 
 run render --render-test "$OUT/render"
+run render-ui --render-ui "$OUT/ui" "$S/photo.jpg" "$S/clip.mov" "$S/tone.wav" "$S/doc.pdf"
 
 echo
 echo "$fails check(s) failed"

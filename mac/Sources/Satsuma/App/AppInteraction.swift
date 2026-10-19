@@ -1,9 +1,19 @@
 import AppKit
 import SatsumaCore
 
-/// The app's side of wheel items: system integrations for the Actions wheel. Option dialogs fall back to the
-/// headless defaults until their windows exist.
+/// The app's side of wheel items: the tools' option dialogs and the Actions wheel's system integrations.
 final class AppInteraction: HeadlessInteraction {
+    override func imageCompress(_ files: [String]) async -> CompressOptions? { await ToolDialogs.imageCompress(files) }
+    override func imageResize(_ files: [String]) async -> ResizeChoice? { await ToolDialogs.imageResize(files) }
+    override func imageCrop(_ file: String) async -> PixelRect? { await ToolDialogs.imageCrop(file) }
+    override func redact(_ files: [String]) async -> RedactChoice? { await ToolDialogs.redact(files) }
+    override func background(_ files: [String]) async -> BackgroundOptions? { await ToolDialogs.background(files) }
+    override func collage(_ files: [String]) async -> CollageOptions? { await ToolDialogs.collage(files) }
+    override func videoCompress(_ files: [String]) async -> VideoCompressOptions? { await ToolDialogs.videoCompress(files) }
+    override func audioCompress(_ files: [String]) async -> Int? { await ToolDialogs.audioCompress(files) }
+    override func trim(_ file: String) async -> (start: Double, end: Double)? { await ToolDialogs.trim(file) }
+    override func pages(_ file: String) async -> [Int]? { await ToolDialogs.pages(file) }
+
     /// A 1x1 invisible panel at a screen point, for anchoring menus and the share picker.
     @MainActor static func anchorView(at p: CGPoint) -> (OverlayPanel, NSView) {
         let panel = OverlayPanel(size: CGSize(width: 1, height: 1))

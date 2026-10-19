@@ -84,8 +84,18 @@ struct SettingsView: View {
     @StateObject private var m = SettingsModel()
     private let keys: [TriggerKey] = [.shift, .command, .option, .control, .none]
 
+    /// False for the offscreen render tests, which can't capture a scroll view's content.
+    var scrolls = true
+
     var body: some View {
-        ScrollView {
+        if scrolls {
+            ScrollView { content }.frame(minWidth: 480, minHeight: 420)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 section("Wheel keys") {
@@ -181,8 +191,6 @@ struct SettingsView: View {
                 }
             }
             .padding(24)
-        }
-        .frame(minWidth: 480, minHeight: 420)
     }
 
     private var header: some View {

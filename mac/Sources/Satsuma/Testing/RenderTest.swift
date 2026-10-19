@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import SwiftUI
 import SatsumaCore
 
 /// Renders wheel frames and progress bubbles to PNG over a synthetic wallpaper, using the same sprites and
@@ -8,8 +9,9 @@ enum RenderTest {
     @MainActor
     static func run(_ dir: String) async throws -> [String] {
         try P.createDir(dir)
-        let samples = P.join(dir, "samples")
-        try P.createDir(samples)
+        // Placeholder files only need names and sizes (sparse, so the 148 MB "video" takes no space).
+        let samples = try AppPaths.newTempDir("render-samples")
+        defer { P.remove(samples) }
         func make(_ name: String, _ bytes: Int64) -> String {
             let p = P.join(samples, name)
             if !P.exists(p) {
@@ -82,6 +84,42 @@ enum RenderTest {
                 files.append(out)
             }
         }
+        return files
+    }
+
+    /// Renders the windows and tool dialogs offscreen (their async previews don't load here, only the layout).
+    @MainActor
+    static func ui(_ dir: String, _ samples: [String]) throws -> [String] {
+        try P.createDir(dir)
+        let img = samples.first ?? Welcome.samplePicture()
+        let video = samples.count > 1 ? samples[1] : img
+        let audio = samples.count > 2 ? samples[2] : img
+        let pdf = samples.count > 3 ? samples[3] : img
+        var files: [String] = []
+        func shot<V: View>(_ name: String, width: CGFloat, _ view: V) throws {
+            for dark in [false, true] {
+                let r = ImageRenderer(content: view.frame(width: width).padding(0)
+                    .background(Color(nsColor: dark ? NSColor(white: 0.16, alpha: 1) : NSColor(white: 0.97, alpha: 1)))
+                    .environment(\.colorScheme, dark ? .dark : .light))
+                r.scale = 2
+                guard let cg = r.cgImage else { continue }
+                let out = P.join(dir, name + (dark ? "-dark" : "") + ".png")
+                try ImageConverter.write(cg, to: out, type: "public.png")
+                files.append(out)
+            }
+        }
+        try shot("settings", width: 560, SettingsView(scrolls: false))
+        try shot("welcome", width: 640, WelcomeView())
+        try shot("compress", width: 460, ToolDialogs.CompressView(files: [img], done: { _ in }).padding(22))
+        try shot("resize", width: 460, ToolDialogs.ResizeView(files: [img], done: { _ in }).padding(22))
+        try shot("crop", width: 600, ToolDialogs.CropView(file: img, done: { _ in }).padding(22))
+        try shot("redact", width: 520, ToolDialogs.RedactView(files: [img], done: { _ in }).padding(22))
+        try shot("backdrop", width: 520, ToolDialogs.BackdropView(files: [img], done: { _ in }).padding(22))
+        try shot("collage", width: 540, ToolDialogs.CollageView(files: [img, img, img], done: { _ in }).padding(22))
+        try shot("video-compress", width: 460, ToolDialogs.VideoCompressView(files: [video], done: { _ in }).padding(22))
+        try shot("audio-compress", width: 460, ToolDialogs.AudioCompressView(files: [audio], done: { _ in }).padding(22))
+        try shot("trim", width: 600, ToolDialogs.TrimView(file: video, done: { _ in }).padding(22))
+        try shot("pages", width: 560, ToolDialogs.PagesView(file: pdf, done: { _ in }).padding(22))
         return files
     }
 

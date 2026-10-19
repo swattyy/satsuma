@@ -72,9 +72,14 @@ enum Cli {
                 guard let dir = rest.first else { throw OpError("Usage: --make-icon <dir.iconset>") }
                 result["files"] = try await MainActor.run { try AppIcon.writeIconset(P.full(dir)) }
                 result["ok"] = true
-            case "--render-test", "--render-ui":
-                guard let dir = rest.first else { throw OpError("Usage: \(args[0]) <dir>") }
+            case "--render-test":
+                guard let dir = rest.first else { throw OpError("Usage: --render-test <dir>") }
                 result["files"] = try await RenderTest.run(P.full(dir))
+                result["ok"] = true
+            case "--render-ui":
+                guard let dir = rest.first else { throw OpError("Usage: --render-ui <dir> [image] [video] [audio] [pdf]") }
+                let samples = rest.dropFirst().map(P.full)
+                result["files"] = try await MainActor.run { try RenderTest.ui(P.full(dir), samples) }
                 result["ok"] = true
             default:
                 break
