@@ -3,3 +3,8 @@ obj/
 dist/
 *.user
 .vs/
+
+mac/.build/
+mac/.swiftpm/
+mac/ci-out/
+mac/build/

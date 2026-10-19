@@ -1,0 +1,50 @@
+name: mac
+
+on:
+  push:
+    branches: [mac]
+    paths: ["mac/**", ".github/workflows/mac.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: mac
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Build
+        id: build
+        run: swift build 2>&1 | tee build.log
+
+      - name: Unit tests
+        run: swift test 2>&1 | tee test.log
+
+      - name: Command line checks
+        if: always() && steps.build.outcome == 'success'
+        run: |
+          chmod +x scripts/ci-checks.sh
+          scripts/ci-checks.sh 2>&1 | tee checks.log
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results
+          path: |
+            mac/build.log
+            mac/test.log
+            mac/checks.log
+            mac/ci-out/
+          if-no-files-found: ignore
+          retention-days: 7
