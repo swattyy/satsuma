@@ -168,7 +168,7 @@ struct SettingsView: View {
                         if let path = m.ffmpeg {
                             Text("Found at \(path)").font(.callout).foregroundColor(.secondary)
                         } else if Ffmpeg.brewPath != nil {
-                            Text("Not installed. MP3, OGG, OPUS, WMA, MKV, WEBM, AVI, WMV and loudness need it.").font(.callout).foregroundColor(.secondary)
+                            Text("Not installed. AVIF output, MP3, OGG, OPUS, WMA, MKV, WEBM, AVI, WMV and loudness need it.").font(.callout).foregroundColor(.secondary)
                             HStack {
                                 Button(m.installing ? "Installing…" : "Install with Homebrew") { m.installFfmpeg() }.disabled(m.installing)
                                 Text(m.installStatus).font(.caption).foregroundColor(.secondary).lineLimit(1)

@@ -22,3 +22,13 @@ Markdig (Alexandre Mutel)                  BSD 2-Clause License
 
 FFmpeg is not included. When you install it from Settings, it is downloaded
 separately (Gyan.FFmpeg.Essentials via winget) and runs as its own program.
+
+The macOS app is built on Apple's frameworks and includes:
+
+libwebp 1.6.0 (Google)                     BSD 3-Clause License, with a patent grant
+  https://chromium.googlesource.com/webm/libwebp/+/refs/tags/v1.6.0/COPYING
+  https://chromium.googlesource.com/webm/libwebp/+/refs/tags/v1.6.0/PATENTS
+  Both texts are also inside the app, in Contents/Resources/Licenses.
+
+FFmpeg is not included in the macOS app either. Settings can install it with
+Homebrew (brew install ffmpeg), and it runs as its own program.

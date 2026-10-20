@@ -28,6 +28,10 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 iconutil -c icns "$OUT/Satsuma.iconset" -o "$APP/Contents/Resources/Satsuma.icns"
 rm -rf "$OUT/Satsuma.iconset"
 cp ../LICENSE "$APP/Contents/Resources/LICENSE.txt"
+mkdir -p "$APP/Contents/Resources/Licenses"
+cp ../THIRD-PARTY-NOTICES.txt "$APP/Contents/Resources/Licenses/THIRD-PARTY-NOTICES.txt"
+cp Sources/CWebP/COPYING "$APP/Contents/Resources/Licenses/libwebp-COPYING.txt"
+cp Sources/CWebP/PATENTS "$APP/Contents/Resources/Licenses/libwebp-PATENTS.txt"
 
 if [ -n "${SIGN_ID:-}" ]; then
     codesign --force --options runtime --timestamp --entitlements Resources/Satsuma.entitlements --sign "$SIGN_ID" "$APP"

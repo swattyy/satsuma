@@ -40,9 +40,14 @@ run selftest --selftest "$S/photo.jpg" "$S/doc.pdf"
 run list-photo --list "$S/photo.jpg"
 
 # Images
-for t in png heic tiff bmp ico pdf; do run "photo-$t" --convert "$t" "$S/photo.jpg"; done
+for t in png heic tiff bmp ico pdf webp; do run "photo-$t" --convert "$t" "$S/photo.jpg"; done
+# WebP comes from the bundled libwebp: read it back with ImageIO, and check the GIF keeps its frames.
+run webp-png --convert png "$S/photo.webp"
+run tool-compress-webp --tool compress "$S/photo.webp"
+run gif-webp --convert webp "$S/anim.gif"
+frames=$(LC_ALL=C grep -ao ANMF "$S/anim.webp" 2>/dev/null | wc -l | tr -d ' ')
+if [ "${frames:-0}" -ge 2 ]; then echo "ok    gif-webp-frames ($frames)"; else echo "FAIL  gif-webp-frames (${frames:-0})"; fails=$((fails + 1)); fi
 if [ -z "$(command -v ffmpeg)" ]; then
-    expect photo-webp "needs FFmpeg" --convert webp "$S/photo.jpg"
     expect photo-avif "needs FFmpeg" --convert avif "$S/photo.jpg"
     expect gif-webm "needs FFmpeg" --convert webm "$S/anim.gif"
     expect mov-mkv "FFmpeg isn't installed" --convert mkv "$S/clip.mov"

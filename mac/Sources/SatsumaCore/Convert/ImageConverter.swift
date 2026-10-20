@@ -21,8 +21,8 @@ public final class DecodedImage {
 }
 
 /// Image conversion. ImageIO reads everything macOS can open (HEIC, AVIF, WebP, camera RAW, TIFF...) and writes
-/// JPEG, PNG, HEIC, TIFF, BMP and GIF. ICO and PDF are written here; WebP and AVIF go through ImageIO when this
-/// macOS can write them and through FFmpeg otherwise.
+/// JPEG, PNG, HEIC, TIFF, BMP and GIF. ICO and PDF are written here and WebP with the bundled libwebp; AVIF goes
+/// through ImageIO when this macOS can write it and through FFmpeg otherwise.
 public enum ImageConverter {
     public static let targets = ["jpg", "png", "webp", "heic", "avif", "pdf", "tiff", "bmp", "ico"]
 
@@ -36,8 +36,6 @@ public enum ImageConverter {
     public static var readableTypes: [String] { (CGImageSourceCopyTypeIdentifiers() as? [String]) ?? [] }
     static func canWrite(_ typeId: String) -> Bool { writableTypes.contains(typeId) }
 
-    /// WebP output works natively or through an FFmpeg build with libwebp.
-    public static var canWriteWebP: Bool { canWrite("org.webmproject.webp") || Ffmpeg.hasEncoder("libwebp") }
 
     // ------------------------------------------------------------------ decode
 
@@ -141,11 +139,10 @@ public enum ImageConverter {
         case "ico":
             try buildIco(img.image).write(to: P.url(output))
         case "webp":
-            if canWrite("org.webmproject.webp") { try write(img.image, to: output, type: "org.webmproject.webp", quality: q) }
-            else { try await ffmpegStill(img, output, codec: .webp, quality: quality) }
+            try WebP.write(img.image, to: output, quality: quality)
         case "avif":
             if canWrite("public.avif") { try write(img.hasAlpha ? img.image : flatten(img.image), to: output, type: "public.avif", quality: q, metadata: meta) }
-            else { try await ffmpegStill(img, output, codec: .avif, quality: quality) }
+            else { try await ffmpegAvif(img, output, quality: quality) }
         case "pdf":
             try pdfFromImages([(img, sourceExt)], output: output)
         default:
@@ -218,39 +215,28 @@ public enum ImageConverter {
         return ctx.makeImage() ?? img
     }
 
-    // ------------------------------------------------------------------ FFmpeg fallbacks (WebP, AVIF, animated GIF)
+    // ------------------------------------------------------------------ FFmpeg fallbacks (AVIF, GIF to WebM)
 
-    enum StillCodec { case webp, avif }
-
-    static func ffmpegStill(_ img: DecodedImage, _ output: String, codec: StillCodec, quality: Int) async throws {
+    static func ffmpegAvif(_ img: DecodedImage, _ output: String, quality: Int) async throws {
+        if !Ffmpeg.available { throw OpError("AVIF output needs FFmpeg. Open Satsuma Settings > Engines to install it.") }
         let tmpDir = try AppPaths.newTempDir("still")
         defer { P.remove(tmpDir) }
         let tmp = P.join(tmpDir, "frame.png")
         try write(img.image, to: tmp, type: "public.png")
-        switch codec {
-        case .webp:
-            guard Ffmpeg.hasEncoder("libwebp") else {
-                throw OpError(Ffmpeg.available ? "This FFmpeg build can't write WebP." : "WebP output needs FFmpeg. Open Satsuma Settings > Engines to install it.")
-            }
-            try await Ffmpeg.run(["-i", tmp, "-c:v", "libwebp", "-quality", "\(quality)", "-compression_level", "4",
-                                  "-pix_fmt", img.hasAlpha ? "yuva420p" : "yuv420p", output], duration: 0, progress: nil)
-        case .avif:
-            let crf = min(max(Int((63 - Double(quality) * 0.45).rounded()), 10), 50) // q90 is crf 22
-            let scale = "scale=trunc(iw/2)*2:trunc(ih/2)*2"
-            if !Ffmpeg.available { throw OpError("AVIF output needs FFmpeg. Open Satsuma Settings > Engines to install it.") }
-            if Ffmpeg.hasEncoder("libaom-av1") {
-                let args: [String] = img.hasAlpha
-                    ? ["-i", tmp, "-filter_complex", "[0:v]\(scale),format=yuva444p,split[c][a];[a]alphaextract[al]", "-map", "[c]", "-map", "[al]",
-                       "-c:v", "libaom-av1", "-still-picture", "1", "-crf", "\(crf)", "-cpu-used", "6", "-row-mt", "1", output]
-                    : ["-i", tmp, "-vf", "\(scale),format=yuv420p", "-c:v", "libaom-av1", "-still-picture", "1", "-crf", "\(crf)",
-                       "-cpu-used", "6", "-row-mt", "1", output]
-                try await Ffmpeg.run(args, duration: 0, progress: nil)
-            } else if Ffmpeg.hasEncoder("libsvtav1") {
-                try await Ffmpeg.run(["-i", tmp, "-vf", "\(scale),format=yuv420p", "-c:v", "libsvtav1", "-crf", "\(crf)", "-preset", "8",
-                                      "-frames:v", "1", output], duration: 0, progress: nil)
-            } else {
-                throw OpError("This FFmpeg build can't write AVIF.")
-            }
+        let crf = min(max(Int((63 - Double(quality) * 0.45).rounded()), 10), 50) // q90 is crf 22
+        let scale = "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+        if Ffmpeg.hasEncoder("libaom-av1") {
+            let args: [String] = img.hasAlpha
+                ? ["-i", tmp, "-filter_complex", "[0:v]\(scale),format=yuva444p,split[c][a];[a]alphaextract[al]", "-map", "[c]", "-map", "[al]",
+                   "-c:v", "libaom-av1", "-still-picture", "1", "-crf", "\(crf)", "-cpu-used", "6", "-row-mt", "1", output]
+                : ["-i", tmp, "-vf", "\(scale),format=yuv420p", "-c:v", "libaom-av1", "-still-picture", "1", "-crf", "\(crf)",
+                   "-cpu-used", "6", "-row-mt", "1", output]
+            try await Ffmpeg.run(args, duration: 0, progress: nil)
+        } else if Ffmpeg.hasEncoder("libsvtav1") {
+            try await Ffmpeg.run(["-i", tmp, "-vf", "\(scale),format=yuv420p", "-c:v", "libsvtav1", "-crf", "\(crf)", "-preset", "8",
+                                  "-frames:v", "1", output], duration: 0, progress: nil)
+        } else {
+            throw OpError("This FFmpeg build can't write AVIF.")
         }
     }
 
@@ -261,14 +247,13 @@ public enum ImageConverter {
                 try await AVMedia.gifToMp4(input, output: out)
                 return out
             }
+            if target == "webp" {
+                try WebP.animate(gif: input, to: out, quality: Settings.current.imageQuality)
+                return out
+            }
             if !Ffmpeg.available { throw OpError("\(target.uppercased()) output needs FFmpeg. Open Satsuma Settings > Engines to install it.") }
             let info = Ffmpeg.probe(input)
-            let args: [String]
-            if target == "webm" {
-                args = ["-i", input, "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1", "-pix_fmt", "yuva420p", out]
-            } else {
-                args = ["-i", input, "-c:v", "libwebp_anim", "-lossless", "0", "-q:v", "\(Settings.current.imageQuality)", "-loop", "0", out]
-            }
+            let args = ["-i", input, "-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1", "-pix_fmt", "yuva420p", out]
             try await Ffmpeg.run(args, duration: info.duration, progress: nil)
             return out
         }

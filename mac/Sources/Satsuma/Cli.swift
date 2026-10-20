@@ -169,6 +169,7 @@ enum SelfTest {
             "imageIOWritable": ImageConverter.writableTypes.sorted(),
             "imageIOReadable": ImageConverter.readableTypes.sorted(),
             "exportPresets": AVAssetExportSession.allExportPresets().sorted(),
+            "libwebp": WebP.version,
             "ffmpeg": orNull(Ffmpeg.path),
             "libreOffice": orNull(LibreOffice.path),
             "homebrew": orNull(Ffmpeg.brewPath),

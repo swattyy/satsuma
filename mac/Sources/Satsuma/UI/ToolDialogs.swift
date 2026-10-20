@@ -31,6 +31,7 @@ enum ToolDialogs {
         @State private var estimate = "Estimating…"
         @State private var sample: CGImage?
         @State private var fullSize = CGSize.zero
+        @State private var estimateRun = 0
         private let dims = [0, 3840, 2560, 1920, 1280, 800]
         private let formats: [String?] = [nil, "jpg", "webp", "avif", "heic"]
 
@@ -49,7 +50,7 @@ enum ToolDialogs {
                 }
                 Text("OPTIONS").font(.caption).bold().foregroundColor(.secondary)
                 Picker("Longest side at most", selection: $dim) {
-                    ForEach(dims.indices, id: \.self) { i in Text(dims[i] == 0 ? "Keep size" : "\(dims[i]) px").tag(i) }
+                    ForEach(dims.indices, id: \.self) { i in Text(verbatim: dims[i] == 0 ? "Keep size" : "\(dims[i]) px").tag(i) }
                 }
                 Picker("Save as", selection: $format) {
                     ForEach(formats.indices, id: \.self) { i in Text(formats[i]?.uppercased().replacingOccurrences(of: "WEBP", with: "WebP") ?? "Keep format").tag(i) }
@@ -64,7 +65,11 @@ enum ToolDialogs {
         }
 
         func updateEstimate() async {
-            guard let sample else { return }
+            // Wait for the slider to settle: a WebP test encode takes long enough to stutter on every tick.
+            estimateRun += 1
+            let run = estimateRun
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard run == estimateRun, let sample else { return }
             let d = dims[dim]
             let fmt = formats[format] ?? ImageTools.editFormat(files[0], hasAlpha: false)
             var img = sample
@@ -72,8 +77,8 @@ enum ToolDialogs {
                 let k = Double(d) / Double(max(sample.width, sample.height))
                 img = ImageConverter.resample(sample, width: Int(Double(sample.width) * k), height: Int(Double(sample.height) * k))
             }
-            let type = fmt == "heic" ? "public.heic" : fmt == "webp" && ImageConverter.writableTypes.contains("org.webmproject.webp") ? "org.webmproject.webp" : "public.jpeg"
-            let bytes = ImageConverter.encode(ImageConverter.flatten(img), type: type, quality: quality / 100)?.count ?? 0
+            let bytes = fmt == "webp" ? (try? WebP.encode(img, quality: Int(quality)))?.count ?? 0
+                : ImageConverter.encode(ImageConverter.flatten(img), type: fmt == "heic" ? "public.heic" : "public.jpeg", quality: quality / 100)?.count ?? 0
             // The sample is downscaled; scale the estimate back up by pixel count.
             if fullSize == .zero, let full = try? await ImageConverter.decode(files[0]) { fullSize = CGSize(width: full.width, height: full.height) }
             var pixels = Double(fullSize.width * fullSize.height)
@@ -124,7 +129,7 @@ enum ToolDialogs {
                         TextField("", text: $height).frame(width: 80).disabled(mode == 1)
                     }
                 }
-                if original.0 > 0 { Text("\(original.0) × \(original.1)  →  \(result.0) × \(result.1)").bold() }
+                if original.0 > 0 { Text(verbatim: "\(original.0) × \(original.1)  →  \(result.0) × \(result.1)").bold() }
                 HStack {
                     ForEach([("4K", 3840), ("1080p", 1920), ("720p", 1280), ("Web", 1024), ("Thumb", 320)], id: \.0) { p in
                         Button(p.0) { mode = 1; width = "\(p.1)" }
@@ -295,7 +300,7 @@ enum ToolDialogs {
                 LabeledSlider(label: "Corner radius", value: $radius, range: 0...15) { "\(Int($0))%" }
                 Text("BACKGROUND").font(.caption).bold().foregroundColor(.secondary)
                 Swatches(selection: $swatch)
-                Picker("Size", selection: $width) { ForEach(widths.indices, id: \.self) { Text("\(widths[$0]) px wide").tag($0) } }
+                Picker("Size", selection: $width) { ForEach(widths.indices, id: \.self) { Text(verbatim: "\(widths[$0]) px wide").tag($0) } }
             }
             .task {
                 var list: [CGImage] = []

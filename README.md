@@ -118,7 +118,7 @@ Satsuma sits in the menu bar and has no Dock icon. Its menu has Pause, Open Shel
 
 What the Mac version uses:
 
-- Images go through ImageIO, which reads HEIC, AVIF, WebP and camera RAW without any extras. WebP and AVIF output need FFmpeg.
+- Images go through ImageIO, which reads HEIC, AVIF, WebP and camera RAW without any extras. WebP output, including animated WebP from a GIF, uses a bundled copy of libwebp. AVIF output needs FFmpeg.
 - MP4, MOV, M4A, WAV, AIFF and FLAC are handled by AVFoundation and Core Audio, with hardware video encoding. MP3, OGG, OPUS and WMA output, MKV, WEBM, AVI and WMV, and the loudness tool need FFmpeg. Settings > Engines runs `brew install ffmpeg` if you have [Homebrew](https://brew.sh).
 - Documents use the same engine as TextEdit, so DOCX, DOC, RTF and ODT work both ways without Word. PDFs are printed with WebKit.
 - Slides, XLS/XLSB, WordPerfect and PDF to PPTX need [LibreOffice](https://www.libreoffice.org); without it those segments stay hidden.
@@ -153,4 +153,4 @@ Satsuma doesn't make network requests. The only download is FFmpeg, and only if 
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The Windows app uses [SkiaSharp](https://github.com/mono/SkiaSharp) (MIT), [PdfPig](https://github.com/UglyToad/PdfPig) (Apache 2.0) and [Markdig](https://github.com/xoofx/markdig) (BSD 2-Clause). The Mac app only uses Apple's frameworks. FFmpeg isn't bundled. Full notices are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
+MIT, see [LICENSE](LICENSE). The Windows app uses [SkiaSharp](https://github.com/mono/SkiaSharp) (MIT), [PdfPig](https://github.com/UglyToad/PdfPig) (Apache 2.0) and [Markdig](https://github.com/xoofx/markdig) (BSD 2-Clause). The Mac app uses Apple's frameworks and [libwebp](https://chromium.googlesource.com/webm/libwebp) (BSD 3-Clause), included as source in [`mac/Sources/CWebP`](mac/Sources/CWebP). FFmpeg isn't bundled. Full notices are in [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
