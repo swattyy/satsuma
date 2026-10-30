@@ -9,7 +9,6 @@ Windows 10 and 11. Everything runs locally, nothing is uploaded.
   <img src="docs/wheel-tools-dark.png" width="380" alt="Tools wheel in dark mode">
 </p>
 
-Inspired by [Tangerine](https://tangerineformac.com/) on macOS. This is a separate Windows project and isn't affiliated with it.
 
 ## Download
 
